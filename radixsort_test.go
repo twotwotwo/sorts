@@ -354,9 +354,7 @@ func TestSortCheck(t *testing.T) {
 	})
 	mustPanic(t, "miskeyedInts", func() {
 		forceRadix(func() {
-			d := miskeyedInts{IntSlice{1, 2, 3}}
-			ByNumber(d)
-			t.Error(SetQSortCutoff(1))
+			ByNumber(miskeyedInts{IntSlice{1, 2, 3}})
 		})
 	})
 	mustPanic(t, "miskeyedStrings", func() {
