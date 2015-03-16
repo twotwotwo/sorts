@@ -9,13 +9,13 @@ import "sort"
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This is a straight copy of the introsort from the standard library so
-// that we can sort a range (qSort(data, a, b) rather than just Sort(data)).
-// Wrapping incoming data in another sort.Interface is possible, but kills
-// speed.
+// This copies of code from sort.go because we can't use something like
+// sort.SortRange(data, a, b) to sort a range of data.  Wrapping incoming
+// data in another sort.Interface is possible, but kills speed.
 
-// It also has a small improvement to medianOfThree, and exports an IsSorted
-// that just calls stdlib sort's, for convenience.
+// There's a small change to medianOfThree that reduces Swaps (though I
+// didn't see a clear improvement on benchmarks from it) and exports an
+// IsSorted that just calls stdlib sort's, for convenience.
 
 func min(a, b int) int {
 	if a < b {

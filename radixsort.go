@@ -10,9 +10,6 @@ import (
 	"sync"
 )
 
-// radix is how many bits we look at at once in a numeric sort. Particular
-// sorts seem to benefit from higher radices, but that's hard to take
-// advantage of.  If you're tuning that hard, look beyond this package.
 const radix = 8
 const mask = (1 << radix) - 1
 
@@ -21,21 +18,12 @@ const mask = (1 << radix) - 1
 // around the break-even point in some sloppy tests.
 var qSortCutoff = 1 << 7
 
-// maxByteSkip controls how long a common prefix the []byte/string sort can
-// detect in each pass.  The common prefix check helps a lot on data that
-// has them, but we need a limit to bound the worst case (where *almost* all
-// data in every pass has a common prefix, and we run into the exception(s)
-// late).  Usually, it's a wash.
-const maxByteSkip = 16
-
 const keyPanicMessage = "sort failed: Key and Less aren't consistent with each other"
 const keyNumberHelp = " (the [NumberType]Key functions like IntKey may help resolve this)"
 const panicMessage = "sort failed: could be a data race, a radixsort bug, or a subtle bug in the interface implementation"
 
 // maxRadixDepth limits how deeply the radix part of string sorts can
-// recurse before we bail to quicksort.  On 64-bit, radix sort uses 2KB temp
-// space always + 2KB per recursion, plus what quicksort uses, so setting it
-// to 32 allows eating up to 66KB.
+// recurse before we bail to quicksort.  Each recursion uses 2KB stck.
 const maxRadixDepth = 32
 
 // byteTblPool is a pool of count/offset tables.
@@ -99,9 +87,8 @@ func ByBytes(data BytesInterface) {
 
 // guessIntShift saves a pass when the data is distributed roughly uniformly
 // in a small range (think shuffled indices into an array), and rarely hurts
-// much otherwise: either it just returns 64-radix quickly, or it returns an
-// incorrect low value and the sorter recovers after one useless counting
-// pass.
+// much otherwise: either it just returns 64-radix quickly, or it returns too
+// small a shift and the sort notices after one useless counting pass.
 func guessIntShift(data NumberInterface) uint {
 	l := data.Len()
 	if l < qSortCutoff {
@@ -293,10 +280,8 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 		return
 	}
 
-	// use a single pass over the keys to swap too-short strings to
-	// start, count bucket sizes, and catch if all keys share a prefix
+	// swap too-short strings to start and count bucket sizes
 	bucketStarts := [256]int{}
-	prefix, prefixIsSet := "", false
 	aStart := a
 	for i := a; i < b; i++ {
 		// swap too-short strings to start
@@ -308,24 +293,6 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 		}
 		k = k[offset:]
 		bucketStarts[k[0]]++
-
-		if !prefixIsSet {
-			prefix = k
-			if len(prefix) > maxByteSkip {
-				prefix = prefix[:maxByteSkip]
-			}
-			prefixIsSet = true
-		} else if len(prefix) > 0 {
-			if len(k) < len(prefix) {
-				prefix = prefix[:len(k)]
-			}
-			for j := 0; j < len(prefix); j++ {
-				if prefix[j] != k[j] {
-					prefix = prefix[:j]
-					break
-				}
-			}
-		}
 	}
 
 	// qSort any strings that were too short
@@ -333,17 +300,16 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 		qSort(data, aStart, a)
 	}
 
-	// skip past common prefixes
-	if len(prefix) > 0 {
-		radixSortString(data, offset+len(prefix), a, b, depth+1, bucketEnds)
-		return
-	}
-
 	pos := a
 	for i, c := range bucketStarts {
 		bucketStarts[i] = pos
 		pos += c
 		bucketEnds[i] = pos
+		if bucketStarts[i] == a && bucketEnds[i] == b {
+			// everything was in the same bucket
+			radixSortString(data, offset+1, a, b, depth+1, bucketEnds)
+			return
+		}
 	}
 
 	for curBucket, bucketEnd := range bucketEnds {
@@ -375,10 +341,8 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		return
 	}
 
-	// use a single pass over the keys to swap too-short strings to
-	// start, bucket strings, and catch if all keys share a prefix
+	// swap too-short strings to start and bucket strings
 	bucketStarts := [256]int{}
-	prefix, prefixIsSet := []byte(nil), false
 	aStart := a
 	for i := a; i < b; i++ {
 		// swap too-short strings to start
@@ -390,24 +354,6 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		}
 		k = k[offset:]
 		bucketStarts[k[0]]++
-
-		if !prefixIsSet {
-			prefix = k
-			if len(prefix) > maxByteSkip {
-				prefix = prefix[:maxByteSkip]
-			}
-			prefixIsSet = true
-		} else if len(prefix) > 0 {
-			if len(k) < len(prefix) {
-				prefix = prefix[:len(k)]
-			}
-			for j := 0; j < len(prefix); j++ {
-				if prefix[j] != k[j] {
-					prefix = prefix[:j]
-					break
-				}
-			}
-		}
 	}
 
 	// qSort any strings that were too short
@@ -415,17 +361,16 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		qSort(data, aStart, a)
 	}
 
-	// skip past common prefixes
-	if len(prefix) > 0 {
-		radixSortBytes(data, offset+len(prefix), a, b, depth+1, bucketEnds)
-		return
-	}
-
 	pos := a
 	for i, c := range bucketStarts {
 		bucketStarts[i] = pos
 		pos += c
 		bucketEnds[i] = pos
+		if bucketStarts[i] == a && bucketEnds[i] == b {
+			// everything was in the same bucket
+			radixSortBytes(data, offset+1, a, b, depth+1, bucketEnds)
+			return
+		}
 	}
 
 	for curBucket, bucketEnd := range bucketEnds {
