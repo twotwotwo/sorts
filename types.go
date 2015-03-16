@@ -69,22 +69,34 @@ func Int32Key(i int32) uint64 { return uint64(uint32(i)) ^ 1<<31 }
 // Int64Key generates a uint64 key from an int64
 func Int64Key(i int64) uint64 { return uint64(i) ^ 1<<63 }
 
-// Float32Key generates a uint64 key from a float32. When sorting floats,
-// consider comparing keys: that will make NaN values sort to the end,
-// whereas with the float less-than operator they can cause panics.
+// Float32Key generates a uint64 key from a float32. To sort float32s,
+// you'll usually use this with Float32Less.
 func Float32Key(f float32) uint64 {
 	b := uint64(math.Float32bits(f)) << 32
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
 }
 
-// Float64Key generates a uint64 key from a float64. When sorting floats,
-// consider comparing keys: that will make NaN values sort to the end,
-// whereas with the float less-than operator they can cause panics.
+// Float32Less compares float32s. Unlike with the float less-than operator,
+// NaN values compare as if they were greater than all numbers, making them
+// sortable.
+func Float32Less(f, g float32) bool {
+	return Float32Key(f) < Float32Key(g)
+}
+
+// Float64Key generates a uint64 key from a float64. To sort float64s,
+// you'll usually use this with Float64Less.
 func Float64Key(f float64) uint64 {
 	b := math.Float64bits(f)
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
+}
+
+// Float64Less compares float64s. Unlike with the float less-than operator,
+// NaN values compare as if they were greater than all numbers, making them
+// sortable.
+func Float64Less(f, g float64) bool {
+	return Float64Key(f) < Float64Key(g)
 }
 
 // Flip reverses the order of items in a sort.Interface.
@@ -167,7 +179,7 @@ func (p Uint64Slice) Sort() { ByNumber(p) }
 type Float32Slice []float32
 
 func (p Float32Slice) Len() int           { return len(p) }
-func (p Float32Slice) Less(i, j int) bool { return Float32Key(p[i]) < Float32Key(p[j]) }
+func (p Float32Slice) Less(i, j int) bool { return Float32Less(p[i], p[j]) }
 func (p Float32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Float32Slice) Key(i int) uint64   { return Float32Key(p[i]) }
 
@@ -178,7 +190,7 @@ func (p Float32Slice) Sort() { ByNumber(p) }
 type Float64Slice []float64
 
 func (p Float64Slice) Len() int           { return len(p) }
-func (p Float64Slice) Less(i, j int) bool { return Float64Key(p[i]) < Float64Key(p[j]) }
+func (p Float64Slice) Less(i, j int) bool { return Float64Less(p[i], p[j]) }
 func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Float64Slice) Key(i int) uint64   { return Float64Key(p[i]) }
 
