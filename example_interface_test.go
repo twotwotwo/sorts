@@ -22,21 +22,20 @@ func (c City) String() string { return fmt.Sprintf("%s (%.1f, %.1f)", c.Name, c.
 // the Latitude field, for sorting cities south to north.
 type ByLatitude []City
 
-func (a ByLatitude) Len() int           { return len(a) }
-func (a ByLatitude) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByLatitude) Len() int      { return len(a) }
+func (a ByLatitude) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 
 // Float32Key and Float32Less make the sort handle the sign bit and sort NaN
 // values to the end.  There are also Float64Key and Float64Less, and
 // [Type]Key functions for int types.
 
-// Key returns a uint64 that is lower for lower latitudes. 
+// Key returns a uint64 that is lower for lower latitudes.
 func (a ByLatitude) Key(i int) uint64 {
 	return radixsort.Float32Key(a[i].Latitude)
 }
 func (a ByLatitude) Less(i, j int) bool {
 	return radixsort.Float32Less(a[i].Latitude, a[j].Latitude)
 }
-
 
 func Example() {
 	cities := []City{
