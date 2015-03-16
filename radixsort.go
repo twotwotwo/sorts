@@ -157,17 +157,23 @@ I've tried some variations on string sort:
   bucket in every pass.)  Worked, didn't affect run time on test data, made
   code trickier; took it out.  Stack use is already bounded, and some KBs of
   extra stack space are maybe not too costly in 2015 (especially vs. 1993).
-  May revisit.
 
-- Keeping both count arrays on the heap using a sync.Pool to recycle them.
-  Not much code, but expanding the stack versus expanding a Pool seems like
-  a small difference.
-
-- Once the subarray gets small enough that we can afford temp space per
-  item, collecting the next 4 or 8 bytes of a string and sorting those, only
+- Once the range gets small enough that we can afford temp space per item,
+  collecting the next 4 or 8 bytes of a string and sorting those, only
   comparing full strings to break ties.  The hope is that the better
   cache-friendliness of sorting that data will outweigh the overhead to set
-  it up.
+  it up.  When I tried this, it improved speed, but not by a mind-blowing
+  amount (a few percent, if I remember right).
+
+  Still kind of interesting despite the weak first result, because if you
+  sort small buckets of strings by sorting uint64s, we could hack our copy
+  of qSort to just sort uint64s, then fall back to slow stdlib sort only
+  when the ints are equal or there are too many strings to get temp space. 
+  That'd also make it less problematic that there's a big overhead from us
+  implementing Less by making two calls to Key, since we'd call Less less
+  often.  So we could take Less out of the API and do it ourselves, which is
+  nice because it's currently redundant and possible to get wrong (think
+  float NaNs).  Ugly code, though.
 
 Two other algorithms:
 
@@ -177,14 +183,15 @@ Two other algorithms:
   For us I fear the extra Key calls would outweigh the better
   cache-friendliness of the swaps, but one way to know.
 
-- LSD radix sort for smaller subarrays; not clear what interface that'd use,
-  since it isn't in-place.
+- LSD radix sort for smaller ranges; not clear what interface that could
+  use, since it isn't in-place.
 
 */
 
-// All three radixSort functions below do a single pass the data. They all
-// fall back to comparison sort for small buckets and equal keys, and try
-// to skip prefixes/infixes that are common across the whole (sub)array.
+// All three radixSort functions below do a counting pass and a swapping
+// pass, then recurse.  They fall back to comparison sort for small buckets
+// and equal keys, and the int sort tries to skip bits that are identical
+// across the whole range being sorted.
 
 func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 	if b-a < qSortCutoff {
@@ -193,7 +200,7 @@ func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 	}
 
 	// use a single pass over the keys to bucket data and find min/max
-	// (for skipping over long common prefixes)
+	// (for skipping over bits that are always identical)
 	var bucketStarts, bucketEnds [1 << radix]int
 	min := data.Key(a)
 	max := min
@@ -284,15 +291,14 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 	bucketStarts := [256]int{}
 	aStart := a
 	for i := a; i < b; i++ {
-		// swap too-short strings to start
 		k := data.Key(i)
 		if len(k) <= offset {
+			// swap too-short strings to start
 			data.Swap(a, i)
 			a++
 			continue
 		}
-		k = k[offset:]
-		bucketStarts[k[0]]++
+		bucketStarts[k[offset]]++
 	}
 
 	// qSort any strings that were too short
@@ -341,19 +347,18 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		return
 	}
 
-	// swap too-short strings to start and bucket strings
+	// swap too-short strings to start and count bucket sizes
 	bucketStarts := [256]int{}
 	aStart := a
 	for i := a; i < b; i++ {
-		// swap too-short strings to start
 		k := data.Key(i)
 		if len(k) <= offset {
+			// swap too-short strings to start
 			data.Swap(a, i)
 			a++
 			continue
 		}
-		k = k[offset:]
-		bucketStarts[k[0]]++
+		bucketStarts[k[offset]]++
 	}
 
 	// qSort any strings that were too short
