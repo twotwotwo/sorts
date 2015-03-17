@@ -5,7 +5,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package radixsort sorts data using numeric, string, or []byte keys.
+// Package radixsort sorts data using uint64, string, or []byte keys, and
+// includes helpers for sorting other numeric types as uint64s.
 package radixsort
 
 import (
@@ -14,19 +15,22 @@ import (
 	"sort" // for Interface
 )
 
-// NumberInterface represents a collection that can be sorted by a numeric
-// (uint64) key.
+// NumberInterface represents a collection that can be sorted by a uint64
+// key.  To use it with signed or floating-point data, use the helper
+// functions for the corresponding type, like IntKey for int data or
+// Float32Key and Float32Less for float32 data.
 type NumberInterface interface {
 	// Len is the number of elements in the collection.
 	Len() int
-	// Less reports whether the element with
-	// index i should sort before the element with index j.
+	// Less reports whether the element with index i should sort before
+	// the element with index j.  To implement it for floating-point
+	// numbers, use Float32Less or Float64Less.
 	Less(i, j int) bool
 	// Swap swaps the elements with indexes i and j.
 	Swap(i, j int)
-	// Key provides the numeric (uint64) key for element i. To generate
-	// uint64 keys for signed integer and floating-point numbers, look
-	// at IntKey, Float64Key, and other similarly-named functions.
+	// Key provides a uint64 key for element i. To implement it for
+	// signed or floating-point data, use the helper functions like
+	// Int32Key.
 	Key(i int) uint64
 }
 

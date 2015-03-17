@@ -33,7 +33,9 @@ var byteTblPool = sync.Pool{New: func() interface{} { return byteTbl(new([256]in
 
 var zeroByteTbl = [256]int{}
 
-// ByNumber sorts data by a numeric key.
+// ByNumber sorts data by a uint64 key. To use it with signed or
+// floating-point data, use helper functions for the corresponding type,
+// like IntKey or Float32Key and Float32Less.
 func ByNumber(data NumberInterface) {
 	l := data.Len()
 	radixSortUint64(data, guessIntShift(data), 0, l)
@@ -168,7 +170,7 @@ I've tried some variations on string sort:
   Still kind of interesting despite the weak first result, because if you
   sort small buckets of strings by sorting uint64s, we could hack our copy
   of qSort to just sort uint64s, then fall back to slow stdlib sort only
-  when the ints are equal or there are too many strings to get temp space. 
+  when the ints are equal or there are too many strings to get temp space.
   That'd also make it less problematic that there's a big overhead from us
   implementing Less by making two calls to Key, since we'd call Less less
   often.  So we could take Less out of the API and do it ourselves, which is
