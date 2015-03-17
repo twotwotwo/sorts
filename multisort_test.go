@@ -32,7 +32,7 @@ func forceRadix(f func()) {
 // []string ordered the same way, for exercising the string and []byte
 // sorts.
 func convertInts(a []int) ([][]byte, []string) { // and let's be honest it ain't no masterpiece either
-	const l = 32 // length of converted number
+	const l = 20 // length of converted number
 	outSpace := make([]byte, l*len(a))
 	for i := range outSpace {
 		outSpace[i] = '0'
@@ -43,9 +43,9 @@ func convertInts(a []int) ([][]byte, []string) { // and let's be honest it ain't
 		outBytes[i] = outSpace[l*i : l*i+l]
 	}
 
-	t := make([]byte, 32)
+	t := make([]byte, 20)
 	for i, v := range a {
-		s := strconv.AppendUint(t[:0], uint64(v), 4)
+		s := strconv.AppendUint(t[:0], uint64(v), 10)
 		copy(outBytes[i][l-len(s):], s)
 	}
 
