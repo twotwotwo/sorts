@@ -147,13 +147,13 @@ Kevin Wayne's Algorithms on string sorts:
 http://algs4.cs.princeton.edu/lectures/51StringSorts.pdf
 for a grounding in string sorts and pointer to American flag sort
 
-Bentley, McIlroy, and Bostic, "Engineering Radix Sort", 1993 at
+McIlroy, Bostic, and McIlroy, "Engineering Radix Sort", 1993 at
 http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.22.6990
 for laying out American flag sort
 
 I've tried some variations on string sort:
 
-- Bentley, Bostic, and McIlroy's trick of keeping our own stack of sorts to
+- McIlroy, Bostic, and McIlroy's trick of keeping our own stack of sorts to
   do instead of recursing.  (Then you only push a sort task for buckets with
   >1 item, whereas now we're eating an int of stack space for every empty
   bucket in every pass.)  Worked, didn't affect run time on test data, made
