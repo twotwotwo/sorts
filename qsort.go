@@ -1,6 +1,8 @@
 package radixsort
 
-import "sort"
+import (
+	"sort"
+)
 
 // Copyright 2009 The Go Authors.
 // Copyright 2014-5 Randall Farmer.
@@ -14,7 +16,7 @@ import "sort"
 // data in another sort.Interface is possible, but kills speed.
 
 // There's a small change to medianOfThree that reduces Swaps (though I
-// didn't see a clear improvement on benchmarks from it) and exports an
+// didn't see a clear improvement on benchmarks from it) and this exports an
 // IsSorted that just calls stdlib sort's, for convenience.
 
 func min(a, b int) int {
@@ -193,7 +195,7 @@ func quickSort(data sort.Interface, a, b, maxDepth int) {
 	}
 }
 
-// qSort quicksorts data.
+// qSort quicksorts data immediately.
 // It performs O(n*log(n)) comparisons and swaps. The sort is not stable.
 func qSort(data sort.Interface, a, b int) {
 	// Switch to heapsort if depth of 2*ceil(lg(n+1)) is reached.
@@ -204,6 +206,59 @@ func qSort(data sort.Interface, a, b int) {
 	}
 	maxDepth *= 2
 	quickSort(data, a, b, maxDepth)
+}
+
+// Quicksort performs a parallel quicksort on data.
+func Quicksort(data sort.Interface) {
+	a, b := 0, data.Len()
+	n := b - a
+	maxDepth := 0
+	for i := n; i > 0; i >>= 1 {
+		maxDepth++
+	}
+	maxDepth *= 2
+	parallelSort(data, quickSortWorker, sortTask{-maxDepth - 1, a, b})
+}
+
+// qSortPar starts a parallel quicksort.
+func qSortPar(data sort.Interface, task sortTask, sortRange func(sortTask)) {
+	a, b := task.pos, task.end
+	n := b - a
+	maxDepth := 0
+	for i := n; i > 0; i >>= 1 {
+		maxDepth++
+	}
+	maxDepth *= 2
+	quickSortWorker(data, sortTask{-maxDepth - 1, a, b}, sortRange)
+}
+
+// quickSortWorker is a parallel analogue of quickSort: it performs a pivot
+// and might asynchronously sort one of the halves if it's large enough.
+func quickSortWorker(dataI interface{}, task sortTask, sortRange func(sortTask)) {
+	maxDepth, a, b := 1-task.offs, task.pos, task.end
+	data := dataI.(sort.Interface)
+	for b-a > MinOffload {
+		if maxDepth == 0 {
+			heapSort(data, a, b)
+			return
+		}
+		maxDepth--
+		mlo, mhi := doPivot(data, a, b)
+		// Avoiding recursion on the larger subproblem guarantees
+		// a stack depth of at most lg(b-a).
+		if mlo-a < b-mhi {
+			sortRange(sortTask{-maxDepth - 1, a, mlo})
+			a = mhi // i.e., quickSortWorker(data, mhi, b)
+		} else {
+			sortRange(sortTask{-maxDepth - 1, mhi, b})
+			b = mlo // i.e., quickSortWorker(data, a, mlo)
+		}
+	}
+	if b-a > 7 {
+		quickSort(data, a, b, maxDepth)
+	} else if b-a > 1 {
+		insertionSort(data, a, b)
+	}
 }
 
 // IsSorted determines whether data is sorted.

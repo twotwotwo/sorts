@@ -626,7 +626,7 @@ func TestHeapsortBM(t *testing.T) {
 func TestBackshift(t *testing.T) {
 	funnyData := [1e3]int{1: -1}
 	funny := IntSlice(funnyData[:])
-	if GuessIntShift(funny) > 0 {
+	if GuessIntShift(funny, len(funny)) > 0 {
 		panic("guessIntShift got smarter")
 	}
 	forceRadix(funny.Sort)
@@ -648,9 +648,9 @@ func TestFwdShift(t *testing.T) {
 
 // TestBrokenPrefix uses string and byte data where *most* input shares a
 // common prefix except for one value that breaks the pattern at each byte
-// position.  It's a bad case for the skip-prefixes optimization, but we're
-// merely looking for it not to barf (sort time explodes or data does not
-// sort).
+// position.  It's a bad case for the "everything was in one bucket"
+// optimization, but we're merely looking for it not to barf (where barfing
+// would be sort time exploding or data not sorting).
 func TestBrokenPrefix(t *testing.T) {
 	src := [128]byte{}
 	src[64] = 1
@@ -692,6 +692,26 @@ func TestShifts(t *testing.T) {
 	forceRadix(Uint64Slice(data).Sort)
 	if !Uint64sAreSorted(data) {
 		t.Errorf("shifts data didn't sort")
+	}
+}
+
+// TestMaxProcs makes sure forcing a serial sort doesn't break everything.
+func TestMaxProcs(t *testing.T) {
+	defer func(old int) { MaxProcs = old }(MaxProcs)
+	MaxProcs = 1
+
+	// this is TestLarge_Random
+	n := 1000000
+	if testing.Short() {
+		n /= 100
+	}
+	data := make([]int, n)
+	for i := 0; i < len(data); i++ {
+		data[i] = rand.Intn(100)
+	}
+	manySort(data)
+	if !IntsAreSorted(data) {
+		t.Errorf("serial sort failed")
 	}
 }
 

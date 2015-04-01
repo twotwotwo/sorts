@@ -66,13 +66,23 @@ func multiSort(a []int) {
 	StringSlice(asStrings).Sort()
 }
 
-// manySort sorts integers with all QSort cutoffs and all data types. (It
-// also throws away just tons of RAM but not sure we care.)
+// manySort sorts integers with all QSort cutoffs and all data types, saving
+// the sorted ints back to a and relying on the sorted checks for the other
+// sorts.  (It also throws away just tons of RAM but not sure we care.)
 func manySort(a []int) {
 	aBytes, aStrings := convertInts(a)
 
 	myInts, myBytes, myStrings := IntSlice{}, BytesSlice{}, StringSlice{}
 	varyQSortCutoff(func() {
+		myInts = append(myInts[:0], a...)
+
+		// make the parallel qsort extra parallel, as it were
+		var oldMinOffload = MinOffload
+		defer func() { MinOffload = oldMinOffload }()
+		MinOffload = 2 // 1 never hits Quicksort insertionSort
+		Quicksort(myInts)
+		MinOffload = oldMinOffload
+
 		myInts = append(myInts[:0], a...)
 		myInts.Sort()
 		myBytes = append(myBytes[:0], aBytes...)

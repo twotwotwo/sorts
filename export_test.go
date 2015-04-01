@@ -12,8 +12,8 @@ func Heapsort(data sort.Interface) {
 	heapSort(data, 0, data.Len())
 }
 
-func GuessIntShift(data NumberInterface) uint {
-	return guessIntShift(data)
+func GuessIntShift(data NumberInterface, l int) uint {
+	return guessIntShift(data, l)
 }
 
 func SetQSortCutoff(i int) int {

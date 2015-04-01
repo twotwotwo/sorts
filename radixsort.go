@@ -7,7 +7,6 @@ package radixsort
 
 import (
 	"bytes"
-	"sync"
 )
 
 const radix = 8
@@ -23,22 +22,22 @@ const keyNumberHelp = " (the [NumberType]Key functions like IntKey may help reso
 const panicMessage = "sort failed: could be a data race, a radixsort bug, or a subtle bug in the interface implementation"
 
 // maxRadixDepth limits how deeply the radix part of string sorts can
-// recurse before we bail to quicksort.  Each recursion uses 2KB stck.
+// recurse before we bail to quicksort.  Each recursion uses 2KB stack.
 const maxRadixDepth = 32
 
-// byteTblPool is a pool of count/offset tables.
-type byteTbl *[256]int
-
-var byteTblPool = sync.Pool{New: func() interface{} { return byteTbl(new([256]int)) }}
-
-var zeroByteTbl = [256]int{}
+// sortTask describes a range of data to be sorted and additional
+// information the sorter needs: bitshift in a numeric sort, byte offset in
+// a string sort, or maximum depth (expressed as -maxDepth-1) for a
+// quicksort.
+type sortTask struct{ offs, pos, end int }
 
 // ByNumber sorts data by a uint64 key. To use it with signed or
 // floating-point data, use helper functions for the corresponding type,
 // like IntKey or Float32Key and Float32Less.
 func ByNumber(data NumberInterface) {
 	l := data.Len()
-	radixSortUint64(data, guessIntShift(data), 0, l)
+	shift := guessIntShift(data, l)
+	parallelSort(data, radixSortUint64, sortTask{offs: int(shift), end: l})
 
 	// check results!
 	for i := 1; i < l; i++ {
@@ -53,10 +52,8 @@ func ByNumber(data NumberInterface) {
 
 // ByString sorts data by a string key.
 func ByString(data StringInterface) {
-	bucketStarts := byteTblPool.Get().(byteTbl)
-	defer byteTblPool.Put(bucketStarts)
 	l := data.Len()
-	radixSortString(data, 0, 0, l, 0, bucketStarts)
+	parallelSort(data, radixSortString, sortTask{end: l})
 
 	// check results!
 	for i := 1; i < l; i++ {
@@ -71,10 +68,8 @@ func ByString(data StringInterface) {
 
 // ByBytes sorts data by a []byte key.
 func ByBytes(data BytesInterface) {
-	bucketStarts := byteTblPool.Get().(byteTbl)
-	defer byteTblPool.Put(bucketStarts)
 	l := data.Len()
-	radixSortBytes(data, 0, 0, l, 0, bucketStarts)
+	parallelSort(data, radixSortBytes, sortTask{end: l})
 
 	// check results!
 	for i := 1; i < l; i++ {
@@ -91,12 +86,14 @@ func ByBytes(data BytesInterface) {
 // in a small range (think shuffled indices into an array), and rarely hurts
 // much otherwise: either it just returns 64-radix quickly, or it returns too
 // small a shift and the sort notices after one useless counting pass.
-func guessIntShift(data NumberInterface) uint {
-	l := data.Len()
+func guessIntShift(data NumberInterface, l int) uint {
 	if l < qSortCutoff {
 		return 64 - radix
 	}
 	step := l >> 5
+	if l > 1<<16 {
+		step = l >> 8
+	}
 	if step == 0 { // only for tests w/qSortCutoff lowered
 		step = 1
 	}
@@ -116,11 +113,6 @@ func guessIntShift(data NumberInterface) uint {
 	for diff != 0 {
 		log2diff++
 		diff >>= 1
-	}
-	if log2diff < 64 {
-		// assuming a uniform distro, it wouldn't be that rare to
-		// estimate 1 bit low, so add margin for that
-		log2diff++
 	}
 	shiftGuess := log2diff - radix
 	if shiftGuess < 0 {
@@ -151,51 +143,24 @@ McIlroy, Bostic, and McIlroy, "Engineering Radix Sort", 1993 at
 http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.22.6990
 for laying out American flag sort
 
-I've tried some variations on string sort:
+- Not using American flag sort's trick of keeping our own stack. It might
+  help on some data, but just bailing to qsort after 32 bytes is enough to
+  keep stack use from exploding.
 
-- McIlroy, Bostic, and McIlroy's trick of keeping our own stack of sorts to
-  do instead of recursing.  (Then you only push a sort task for buckets with
-  >1 item, whereas now we're eating an int of stack space for every empty
-  bucket in every pass.)  Worked, didn't affect run time on test data, made
-  code trickier; took it out.  Stack use is already bounded, and some KBs of
-  extra stack space are maybe not too costly in 2015 (especially vs. 1993).
-
-- Once the range gets small enough that we can afford temp space per item,
-  collecting the next 4 or 8 bytes of a string and sorting those, only
-  comparing full strings to break ties.  The hope is that the better
-  cache-friendliness of sorting that data will outweigh the overhead to set
-  it up.  When I tried this, it improved speed, but not by a mind-blowing
-  amount (a few percent, if I remember right).
-
-  Still kind of interesting despite the weak first result, because if you
-  sort small buckets of strings by sorting uint64s, we could hack our copy
-  of qSort to just sort uint64s, then fall back to slow stdlib sort only
-  when the ints are equal or there are too many strings to get temp space.
-  That'd also make it less problematic that there's a big overhead from us
-  implementing Less by making two calls to Key, since we'd call Less less
-  often.  So we could take Less out of the API and do it ourselves, which is
-  nice because it's currently redundant and possible to get wrong (think
-  float NaNs).  Ugly code, though.
-
-Two other algorithms:
-
-- Radix quicksort: see the Algorithms slide deck and Bentley and Sedgewick,
-  "Sorting Strings with Three-Way Radix Quicksort", 1998, at
-  http://www.drdobbs.com/database/sorting-strings-with-three-way-radix-qui/184410724
-  For us I fear the extra Key calls would outweigh the better
-  cache-friendliness of the swaps, but one way to know.
-
-- LSD radix sort for smaller ranges; not clear what interface that could
-  use, since it isn't in-place.
+- Would kinda like to try speeding strings' quicksort phase by collecting
+  the next 8 bytes and sorting uint64s, and only comparing the whole string
+  to break ties.
 
 */
 
 // All three radixSort functions below do a counting pass and a swapping
-// pass, then recurse.  They fall back to comparison sort for small buckets
-// and equal keys, and the int sort tries to skip bits that are identical
-// across the whole range being sorted.
+// pass, then recurse.  They fall back to comparison sort for small buckets,
+// and the int sort tries to skip bits that are identical across the whole
+// range being sorted.
 
-func radixSortUint64(data NumberInterface, shift uint, a, b int) {
+func radixSortUint64(dataI interface{}, task sortTask, sortRange func(sortTask)) {
+	data := dataI.(NumberInterface)
+	shift, a, b := uint(task.offs), task.pos, task.end
 	if b-a < qSortCutoff {
 		qSort(data, a, b)
 		return
@@ -220,7 +185,6 @@ func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 	// skip past common prefixes, bail if all keys equal
 	diff := min ^ max
 	if diff == 0 {
-		qSort(data, a, b)
 		return
 	}
 	if diff>>shift == 0 || diff>>(shift+radix) != 0 {
@@ -234,7 +198,7 @@ func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 		if nextShift < 0 {
 			nextShift = 0
 		}
-		radixSortUint64(data, uint(nextShift), a, b)
+		sortRange(sortTask{int(nextShift), a, b})
 		return
 	}
 
@@ -260,13 +224,7 @@ func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 	}
 
 	if shift == 0 {
-		// each bucket is a unique key; just qSort any dupes
-		for _, end := range bucketEnds {
-			if end > pos+1 {
-				qSort(data, pos, end)
-			}
-			pos = end
-		}
+		// each bucket is a unique key
 		return
 	}
 
@@ -277,21 +235,31 @@ func radixSortUint64(data NumberInterface, shift uint, a, b int) {
 	pos = a
 	for _, end := range bucketEnds {
 		if end > pos+1 {
-			radixSortUint64(data, nextShift, pos, end)
+			sortRange(sortTask{int(nextShift), pos, end})
 		}
 		pos = end
 	}
 }
 
-func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds byteTbl) {
-	if b-a < qSortCutoff || depth == maxRadixDepth {
+func radixSortString(dataI interface{}, task sortTask, sortRange func(sortTask)) {
+	data := dataI.(StringInterface)
+	offset, a, b := task.offs, task.pos, task.end
+	if offset < 0 {
+		// in a parallel quicksort of items w/long common key prefix
+		quickSortWorker(data, task, sortRange)
+		return
+	}
+	if b-a < qSortCutoff {
 		qSort(data, a, b)
+		return
+	}
+	if offset == maxRadixDepth {
+		qSortPar(data, task, sortRange)
 		return
 	}
 
 	// swap too-short strings to start and count bucket sizes
-	bucketStarts := [256]int{}
-	aStart := a
+	bucketStarts, bucketEnds := [256]int{}, [256]int{}
 	for i := a; i < b; i++ {
 		k := data.Key(i)
 		if len(k) <= offset {
@@ -303,11 +271,6 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 		bucketStarts[k[offset]]++
 	}
 
-	// qSort any strings that were too short
-	if a-aStart > 1 {
-		qSort(data, aStart, a)
-	}
-
 	pos := a
 	for i, c := range bucketStarts {
 		bucketStarts[i] = pos
@@ -315,13 +278,15 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 		bucketEnds[i] = pos
 		if bucketStarts[i] == a && bucketEnds[i] == b {
 			// everything was in the same bucket
-			radixSortString(data, offset+1, a, b, depth+1, bucketEnds)
+			sortRange(sortTask{offset + 1, a, b})
 			return
 		}
 	}
 
+	i := a
 	for curBucket, bucketEnd := range bucketEnds {
-		i := bucketStarts[curBucket]
+		start := i
+		i = bucketStarts[curBucket]
 		for i < bucketEnd {
 			destBucket := data.Key(i)[offset]
 			if destBucket == byte(curBucket) {
@@ -332,26 +297,31 @@ func radixSortString(data StringInterface, offset, a, b, depth int, bucketEnds b
 			data.Swap(i, bucketStarts[destBucket])
 			bucketStarts[destBucket]++
 		}
-	}
-
-	pos = a
-	for _, end := range bucketStarts {
-		if end > pos+1 {
-			radixSortString(data, offset+1, pos, end, depth+1, bucketEnds)
+		if i > start+1 {
+			sortRange(sortTask{offset + 1, start, i})
 		}
-		pos = end
 	}
 }
 
-func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byteTbl) {
-	if b-a < qSortCutoff || depth == maxRadixDepth {
+func radixSortBytes(dataI interface{}, task sortTask, sortRange func(sortTask)) {
+	data := dataI.(BytesInterface)
+	offset, a, b := task.offs, task.pos, task.end
+	if offset < 0 {
+		// in a parallel quicksort of items w/long common key prefix
+		quickSortWorker(data, task, sortRange)
+		return
+	}
+	if b-a < qSortCutoff {
 		qSort(data, a, b)
+		return
+	}
+	if offset == maxRadixDepth {
+		qSortPar(data, task, sortRange)
 		return
 	}
 
 	// swap too-short strings to start and count bucket sizes
-	bucketStarts := [256]int{}
-	aStart := a
+	bucketStarts, bucketEnds := [256]int{}, [256]int{}
 	for i := a; i < b; i++ {
 		k := data.Key(i)
 		if len(k) <= offset {
@@ -363,11 +333,6 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		bucketStarts[k[offset]]++
 	}
 
-	// qSort any strings that were too short
-	if a-aStart > 1 {
-		qSort(data, aStart, a)
-	}
-
 	pos := a
 	for i, c := range bucketStarts {
 		bucketStarts[i] = pos
@@ -375,13 +340,15 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 		bucketEnds[i] = pos
 		if bucketStarts[i] == a && bucketEnds[i] == b {
 			// everything was in the same bucket
-			radixSortBytes(data, offset+1, a, b, depth+1, bucketEnds)
+			sortRange(sortTask{offset + 1, a, b})
 			return
 		}
 	}
 
+	i := a
 	for curBucket, bucketEnd := range bucketEnds {
-		i := bucketStarts[curBucket]
+		start := i
+		i = bucketStarts[curBucket]
 		for i < bucketEnd {
 			destBucket := data.Key(i)[offset]
 			if destBucket == byte(curBucket) {
@@ -392,13 +359,8 @@ func radixSortBytes(data BytesInterface, offset, a, b, depth int, bucketEnds byt
 			data.Swap(i, bucketStarts[destBucket])
 			bucketStarts[destBucket]++
 		}
-	}
-
-	pos = a
-	for _, end := range bucketStarts {
-		if end > pos+1 {
-			radixSortBytes(data, offset+1, pos, end, depth+1, bucketEnds)
+		if i > start+1 {
+			sortRange(sortTask{offset + 1, start, i})
 		}
-		pos = end
 	}
 }
