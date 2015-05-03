@@ -18,7 +18,7 @@ const mask = (1 << radix) - 1
 var qSortCutoff = 1 << 7
 
 const keyPanicMessage = "sort failed: Key and Less aren't consistent with each other"
-const keyNumberHelp = " (the [NumberType]Key functions like IntKey may help resolve this)"
+const keyUint64Help = " (the [Uint64Type]Key functions like IntKey may help resolve this)"
 const panicMessage = "sort failed: could be a data race, a radixsort bug, or a subtle bug in the interface implementation"
 
 // maxRadixDepth limits how deeply the radix part of string sorts can
@@ -31,10 +31,8 @@ const maxRadixDepth = 32
 // quicksort.
 type task struct{ offs, pos, end int }
 
-// ByNumber sorts data by a uint64 key. To use it with signed or
-// floating-point data, use helper functions for the corresponding type,
-// like IntKey or Float32Key and Float32Less.
-func ByNumber(data NumberInterface) {
+// ByUint64 sorts data by a uint64 key.
+func ByUint64(data Uint64Interface) {
 	l := data.Len()
 	shift := guessIntShift(data, l)
 	parallelSort(data, radixSortUint64, task{offs: int(shift), end: l})
@@ -43,7 +41,32 @@ func ByNumber(data NumberInterface) {
 	for i := 1; i < l; i++ {
 		if data.Less(i, i-1) {
 			if data.Key(i) > data.Key(i-1) {
-				panic(keyPanicMessage + keyNumberHelp)
+				panic(keyPanicMessage + keyUint64Help)
+			}
+			panic(panicMessage)
+		}
+	}
+}
+
+// intwrapper tunrs an Int64Interface into a Uint64Interface for
+// guessIntShift
+type intwrapper struct{ Int64Interface }
+
+func (iw intwrapper) Key(i int) uint64 {
+	return int64Key(iw.Int64Interface.Key(i))
+}
+
+// ByInt64 sorts data by an int64 key.
+func ByInt64(data Int64Interface) {
+	l := data.Len()
+	shift := guessIntShift(intwrapper{data}, l)
+	parallelSort(data, radixSortInt64, task{offs: int(shift), end: l})
+
+	// check results!
+	for i := 1; i < l; i++ {
+		if data.Less(i, i-1) {
+			if data.Key(i) > data.Key(i-1) {
+				panic(keyPanicMessage + keyUint64Help)
 			}
 			panic(panicMessage)
 		}
@@ -87,7 +110,7 @@ func ByBytes(data BytesInterface) {
 // hurts much otherwise: either it just returns 64-radix quickly, or it
 // returns too small a shift and the sort notices after one useless counting
 // pass.
-func guessIntShift(data NumberInterface, l int) uint {
+func guessIntShift(data Uint64Interface, l int) uint {
 	if l < qSortCutoff {
 		return 64 - radix
 	}
@@ -166,7 +189,7 @@ for laying out American flag sort
 // across the whole range being sorted.
 
 func radixSortUint64(dataI interface{}, t task, sortRange func(task)) {
-	data := dataI.(NumberInterface)
+	data := dataI.(Uint64Interface)
 	shift, a, b := uint(t.offs), t.pos, t.end
 	if b-a < qSortCutoff {
 		qSort(data, a, b)
@@ -220,6 +243,89 @@ func radixSortUint64(dataI interface{}, t task, sortRange func(task)) {
 		i := bucketStarts[curBucket]
 		for i < bucketEnd {
 			destBucket := (data.Key(i) >> shift) & mask
+			if destBucket == uint64(curBucket) {
+				i++
+				bucketStarts[destBucket]++
+				continue
+			}
+			data.Swap(i, bucketStarts[destBucket])
+			bucketStarts[destBucket]++
+		}
+	}
+
+	if shift == 0 {
+		// each bucket is a unique key
+		return
+	}
+
+	nextShift := shift - radix
+	if shift < radix {
+		nextShift = 0
+	}
+	pos = a
+	for _, end := range bucketEnds {
+		if end > pos+1 {
+			sortRange(task{int(nextShift), pos, end})
+		}
+		pos = end
+	}
+}
+
+func radixSortInt64(dataI interface{}, t task, sortRange func(task)) {
+	data := dataI.(Int64Interface)
+	shift, a, b := uint(t.offs), t.pos, t.end
+	if b-a < qSortCutoff {
+		qSort(data, a, b)
+		return
+	}
+
+	// use a single pass over the keys to bucket data and find min/max
+	// (for skipping over bits that are always identical)
+	var bucketStarts, bucketEnds [1 << radix]int
+	min := int64Key(data.Key(a))
+	max := min
+	for i := a; i < b; i++ {
+		k := int64Key(data.Key(i))
+		bucketStarts[(k>>shift)&mask]++
+		if k < min {
+			min = k
+		}
+		if k > max {
+			max = k
+		}
+	}
+
+	// skip past common prefixes, bail if all keys equal
+	diff := min ^ max
+	if diff == 0 {
+		return
+	}
+	if diff>>shift == 0 || diff>>(shift+radix) != 0 {
+		// find highest 1 bit in diff
+		log2diff := 0
+		for diff != 0 {
+			log2diff++
+			diff >>= 1
+		}
+		nextShift := log2diff - radix
+		if nextShift < 0 {
+			nextShift = 0
+		}
+		sortRange(task{int(nextShift), a, b})
+		return
+	}
+
+	pos := a
+	for i, c := range bucketStarts {
+		bucketStarts[i] = pos
+		pos += c
+		bucketEnds[i] = pos
+	}
+
+	for curBucket, bucketEnd := range bucketEnds {
+		i := bucketStarts[curBucket]
+		for i < bucketEnd {
+			destBucket := (int64Key(data.Key(i)) >> shift) & mask
 			if destBucket == uint64(curBucket) {
 				i++
 				bucketStarts[destBucket]++

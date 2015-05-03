@@ -344,7 +344,7 @@ func TestSortCheck(t *testing.T) {
 		return
 	}
 	mustPanic(t, "unsortableInts", func() {
-		ByNumber(unsortableInts{IntSlice{1, 1, 1}})
+		ByInt64(unsortableInts{IntSlice{1, 1, 1}})
 	})
 	mustPanic(t, "unsortableStrings", func() {
 		ByString(unsortableStrings{StringSlice{"", "", ""}})
@@ -354,7 +354,7 @@ func TestSortCheck(t *testing.T) {
 	})
 	mustPanic(t, "miskeyedInts", func() {
 		forceRadix(func() {
-			ByNumber(miskeyedInts{IntSlice{1, 2, 3}})
+			ByInt64(miskeyedInts{IntSlice{1, 2, 3}})
 		})
 	})
 	mustPanic(t, "miskeyedStrings", func() {
@@ -476,8 +476,8 @@ type testingData struct {
 	ncmp, nswap int
 }
 
-func (d *testingData) Len() int         { return len(d.data) }
-func (d *testingData) Key(i int) uint64 { return IntKey(d.data[i]) }
+func (d *testingData) Len() int        { return len(d.data) }
+func (d *testingData) Key(i int) int64 { return int64(d.data[i]) }
 func (d *testingData) Less(i, j int) bool {
 	d.ncmp++
 	return d.data[i] < d.data[j]
@@ -604,12 +604,12 @@ func testBentleyMcIlroy(t *testing.T, sort func(sort.Interface), maxswap func(in
 	}
 }
 
-func byNumberWrapper(d sort.Interface) {
-	ByNumber(d.(NumberInterface))
+func byInt64Wrapper(d sort.Interface) {
+	ByInt64(d.(Int64Interface))
 }
 
 func TestSortBM(t *testing.T) {
-	testBentleyMcIlroy(t, byNumberWrapper, func(n int) int { return n * lg(n) * 12 / 10 })
+	testBentleyMcIlroy(t, byInt64Wrapper, func(n int) int { return n * lg(n) * 12 / 10 })
 }
 
 func TestManySortBM(t *testing.T) {
@@ -764,7 +764,7 @@ func countOps(t *testing.T, algo func(sort.Interface), name string) {
 	}
 }
 
-func TestCountSortOps(t *testing.T) { countOps(t, byNumberWrapper, "Sort  ") }
+func TestCountSortOps(t *testing.T) { countOps(t, byInt64Wrapper, "Sort  ") }
 
 func bench(b *testing.B, size int, algo func(sort.Interface), name string) {
 	b.StopTimer()
@@ -790,6 +790,6 @@ func bench(b *testing.B, size int, algo func(sort.Interface), name string) {
 	}
 }
 
-func BenchmarkSort1e2(b *testing.B) { bench(b, 1e2, byNumberWrapper, "Sort") }
-func BenchmarkSort1e4(b *testing.B) { bench(b, 1e4, byNumberWrapper, "Sort") }
-func BenchmarkSort1e6(b *testing.B) { bench(b, 1e6, byNumberWrapper, "Sort") }
+func BenchmarkSort1e2(b *testing.B) { bench(b, 1e2, byInt64Wrapper, "Sort") }
+func BenchmarkSort1e4(b *testing.B) { bench(b, 1e4, byInt64Wrapper, "Sort") }
+func BenchmarkSort1e6(b *testing.B) { bench(b, 1e6, byInt64Wrapper, "Sort") }

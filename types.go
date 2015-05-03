@@ -5,8 +5,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package radixsort sorts data using uint64, string, or []byte keys, and
-// includes helpers for sorting other numeric types as uint64s.
+// Package radixsort sorts data using (u)int64, string, or []byte keys, with
+// helpers for sorting floats.
 package radixsort
 
 import (
@@ -15,11 +15,24 @@ import (
 	"sort" // for Interface
 )
 
-// NumberInterface represents a collection that can be sorted by a uint64
-// key.  To use it with signed or floating-point data, use the helper
-// functions for the corresponding type, like IntKey for int data or
-// Float32Key and Float32Less for float32 data.
-type NumberInterface interface {
+// Uint64Interface represents a collection that can be sorted by a uint64
+// key.
+type Uint64Interface interface {
+	// Len is the number of elements in the collection.
+	Len() int
+	// Less reports whether the element with index i should sort before
+	// the element with index j.  To implement it for floating-point
+	// numbers, use Float32Less or Float64Less.
+	Less(i, j int) bool
+	// Swap swaps the elements with indexes i and j.
+	Swap(i, j int)
+	// Key provides a uint64 key for element i.
+	Key(i int) uint64
+}
+
+// Int64Interface represents a collection that can be sorted by an int64
+// key.
+type Int64Interface interface {
 	// Len is the number of elements in the collection.
 	Len() int
 	// Less reports whether the element with index i should sort before
@@ -31,7 +44,7 @@ type NumberInterface interface {
 	// Key provides a uint64 key for element i. To implement it for
 	// signed or floating-point data, use the helper functions like
 	// Int32Key.
-	Key(i int) uint64
+	Key(i int) int64
 }
 
 // StringInterface represents a collection that can be sorted by a string
@@ -64,41 +77,33 @@ type BytesInterface interface {
 
 const signBit = uint64(^uint(0) ^ (^uint(0))>>1) // works f/any int size
 
-// IntKey generates a uint64 sort key from an int
-func IntKey(i int) uint64 { return uint64(uint(i)) ^ signBit }
-
-// Int32Key generates a uint64 sort key from an int32
-func Int32Key(i int32) uint64 { return uint64(uint32(i)) ^ 1<<31 }
-
-// Int64Key generates a uint64 key from an int64
-func Int64Key(i int64) uint64 { return uint64(i) ^ 1<<63 }
+// int64Key generates a uint64 from an int64
+func int64Key(i int64) uint64 { return uint64(i) ^ 1<<63 }
 
 // Float32Key generates a uint64 key from a float32. To sort float32s,
-// you'll usually use this with Float32Less.
+// use this with Float32Less.
 func Float32Key(f float32) uint64 {
 	b := uint64(math.Float32bits(f)) << 32
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
 }
 
-// Float32Less compares float32s. Unlike with the float less-than operator,
-// NaN values compare as if they were greater than all numbers, making them
-// sortable.
+// Float32Less compares float32s, sorting NaNs (which are normally
+// unsortable) to the end.
 func Float32Less(f, g float32) bool {
 	return Float32Key(f) < Float32Key(g)
 }
 
 // Float64Key generates a uint64 key from a float64. To sort float64s,
-// you'll usually use this with Float64Less.
+// use this with Float64Less.
 func Float64Key(f float64) uint64 {
 	b := math.Float64bits(f)
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
 }
 
-// Float64Less compares float64s. Unlike with the float less-than operator,
-// NaN values compare as if they were greater than all numbers, making them
-// sortable.
+// Float64Less compares float64s, sorting NaNs (which are normally
+// unsortable) to the end.
 func Float64Less(f, g float64) bool {
 	return Float64Key(f) < Float64Key(g)
 }
@@ -113,40 +118,40 @@ func Flip(data sort.Interface) {
 	}
 }
 
-// IntSlice attaches the methods of NumberInterface to []int, sorting in increasing order.
+// IntSlice attaches the methods of Int64Interface to []int, sorting in increasing order.
 type IntSlice []int
 
 func (p IntSlice) Len() int           { return len(p) }
 func (p IntSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p IntSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p IntSlice) Key(i int) uint64   { return IntKey(p[i]) }
+func (p IntSlice) Key(i int) int64    { return int64(p[i]) }
 
 // Sort is a convenience method.
-func (p IntSlice) Sort() { ByNumber(p) }
+func (p IntSlice) Sort() { ByInt64(p) }
 
-// Int32Slice attaches the methods of NumberInterface to []int32, sorting in increasing order.
+// Int32Slice attaches the methods of Uint64Interface to []int32, sorting in increasing order.
 type Int32Slice []int32
 
 func (p Int32Slice) Len() int           { return len(p) }
 func (p Int32Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Int32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Int32Slice) Key(i int) uint64   { return Int32Key(p[i]) }
+func (p Int32Slice) Key(i int) int64    { return int64(p[i]) }
 
 // Sort is a convenience method.
-func (p Int32Slice) Sort() { ByNumber(p) }
+func (p Int32Slice) Sort() { ByInt64(p) }
 
-// Int64Slice attaches the methods of NumberInterface to []int64, sorting in increasing order.
+// Int64Slice attaches the methods of Uint64Interface to []int64, sorting in increasing order.
 type Int64Slice []int64
 
 func (p Int64Slice) Len() int           { return len(p) }
 func (p Int64Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Int64Slice) Key(i int) uint64   { return Int64Key(p[i]) }
+func (p Int64Slice) Key(i int) int64    { return p[i] }
 
 // Sort is a convenience method.
-func (p Int64Slice) Sort() { ByNumber(p) }
+func (p Int64Slice) Sort() { ByInt64(p) }
 
-// UintSlice attaches the methods of NumberInterface to []uint, sorting in increasing order.
+// UintSlice attaches the methods of Uint64Interface to []uint, sorting in increasing order.
 type UintSlice []uint
 
 func (p UintSlice) Len() int           { return len(p) }
@@ -155,9 +160,9 @@ func (p UintSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p UintSlice) Key(i int) uint64   { return uint64(p[i]) }
 
 // Sort is a convenience method.
-func (p UintSlice) Sort() { ByNumber(p) }
+func (p UintSlice) Sort() { ByUint64(p) }
 
-// Uint32Slice attaches the methods of NumberInterface to []int32, sorting in increasing order.
+// Uint32Slice attaches the methods of Uint64Interface to []int32, sorting in increasing order.
 type Uint32Slice []uint32
 
 func (p Uint32Slice) Len() int           { return len(p) }
@@ -166,9 +171,9 @@ func (p Uint32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Uint32Slice) Key(i int) uint64   { return uint64(p[i]) }
 
 // Sort is a convenience method.
-func (p Uint32Slice) Sort() { ByNumber(p) }
+func (p Uint32Slice) Sort() { ByUint64(p) }
 
-// Uint64Slice attaches the methods of NumberInterface to []uint64, sorting in increasing order.
+// Uint64Slice attaches the methods of Uint64Interface to []uint64, sorting in increasing order.
 type Uint64Slice []uint64
 
 func (p Uint64Slice) Len() int           { return len(p) }
@@ -177,9 +182,9 @@ func (p Uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Uint64Slice) Key(i int) uint64   { return p[i] }
 
 // Sort is a convenience method.
-func (p Uint64Slice) Sort() { ByNumber(p) }
+func (p Uint64Slice) Sort() { ByUint64(p) }
 
-// Float32Slice attaches the methods of NumberInterface to []uint32, sorting in increasing order, NaNs last.
+// Float32Slice attaches the methods of Uint64Interface to []uint32, sorting in increasing order, NaNs last.
 type Float32Slice []float32
 
 func (p Float32Slice) Len() int           { return len(p) }
@@ -188,9 +193,9 @@ func (p Float32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Float32Slice) Key(i int) uint64   { return Float32Key(p[i]) }
 
 // Sort is a convenience method.
-func (p Float32Slice) Sort() { ByNumber(p) }
+func (p Float32Slice) Sort() { ByUint64(p) }
 
-// Float64Slice attaches the methods of NumberInterface to []float64, sorting in increasing order, NaNs last.
+// Float64Slice attaches the methods of Uint64Interface to []float64, sorting in increasing order, NaNs last.
 type Float64Slice []float64
 
 func (p Float64Slice) Len() int           { return len(p) }
@@ -199,7 +204,7 @@ func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p Float64Slice) Key(i int) uint64   { return Float64Key(p[i]) }
 
 // Sort is a convenience method.
-func (p Float64Slice) Sort() { ByNumber(p) }
+func (p Float64Slice) Sort() { ByUint64(p) }
 
 // StringSlice attaches the methods of StringInterface to []string, sorting in increasing order.
 type StringSlice []string

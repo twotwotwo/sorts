@@ -46,7 +46,7 @@ func Example() {
 	}
 
 	fmt.Println(cities)
-	radixsort.ByNumber(ByLatitude(cities))
+	radixsort.ByUint64(ByLatitude(cities))
 	fmt.Println(cities)
 
 	// Output:

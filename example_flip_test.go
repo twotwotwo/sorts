@@ -14,7 +14,7 @@ import (
 func Example_flip() {
 	scores := []int{39, 492, 4912, 39, -10, 4, 92}
 	data := radixsort.IntSlice(scores)
-	radixsort.ByNumber(data)
+	radixsort.ByInt64(data)
 	radixsort.Flip(data) // high scores first
 	fmt.Println(scores)
 	// Output: [4912 492 92 39 39 4 -10]
