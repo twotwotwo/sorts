@@ -6,7 +6,7 @@
 // license that can be found in the LICENSE file.
 
 // Package sorts does parallel radix sorts of data by (u)int64, string, or
-// []byte keys, and parallel quicksort.  See the sortutil package for
+// []byte keys, and parallel quicksort.  See the sorts/sortutil package for
 // shortcuts for common slice types and help sorting floats.
 package sorts
 
