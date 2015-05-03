@@ -2,7 +2,7 @@
 
 [radixsort](http://godoc.org/github.com/twotwotwo/radixsort.test) provides
 parallel radix sorting by a string, []byte, or (u)int64 key, and a parallel
-quicksort.  Try it if faster sorting large datasets is worth the hassle.
+quicksort.  Try it if faster sorting of large datasets is worth the hassle.
 
 To radix sort, implement sort.Interface plus one more method, Key(i int),
 returning the key for an item as string/[]byte/(u)int64, and call
