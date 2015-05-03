@@ -400,12 +400,27 @@ func TestFlip(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
+	Quicksort(IntSlice(nil))
 	IntSlice(nil).Sort()
+	UintSlice(nil).Sort()
 	StringSlice(nil).Sort()
 	BytesSlice(nil).Sort()
 	IntSlice(nil).Search(0)
 	StringSlice(nil).Search("")
 	BytesSlice(nil).Search([]byte(nil))
+}
+
+func TestTiny(t *testing.T) {
+	Quicksort(IntSlice([]int{1}))
+	IntSlice([]int{1}).Sort()
+	UintSlice([]uint{1}).Sort()
+	StringSlice([]string{""}).Sort()
+	BytesSlice([][]byte{nil}).Sort()
+	Quicksort(IntSlice([]int{1, 1}))
+	IntSlice([]int{1, 1}).Sort()
+	UintSlice([]uint{1, 1}).Sort()
+	StringSlice([]string{"", ""}).Sort()
+	BytesSlice([][]byte{nil, nil}).Sort()
 }
 
 func TestSortLarge_Random(t *testing.T) {

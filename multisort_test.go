@@ -9,8 +9,8 @@ import "strconv"
 import "sort"
 
 // Helpers to sort in different ways: with the quicksort cutoff lowered or
-// raised (to exercise radix code more or less), and sorting ints as bytes
-// or strings (to exercise byte/string sort code).
+// raised (to exercise radix code more or less), and sorting ints as uints,
+// bytes or strings (to exercise those types' sort code).
 
 // varyQSortCutoff runs a function with qSortCutoff set to 1, the default
 // value, and 1e9.
