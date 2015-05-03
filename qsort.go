@@ -217,27 +217,27 @@ func Quicksort(data sort.Interface) {
 		maxDepth++
 	}
 	maxDepth *= 2
-	parallelSort(data, quickSortWorker, sortTask{-maxDepth - 1, a, b})
+	parallelSort(data, quickSortWorker, task{-maxDepth - 1, a, b})
 }
 
 // qSortPar starts a parallel quicksort.
-func qSortPar(data sort.Interface, task sortTask, sortRange func(sortTask)) {
-	a, b := task.pos, task.end
+func qSortPar(data sort.Interface, t task, sortRange func(task)) {
+	a, b := t.pos, t.end
 	n := b - a
 	maxDepth := 0
 	for i := n; i > 0; i >>= 1 {
 		maxDepth++
 	}
 	maxDepth *= 2
-	quickSortWorker(data, sortTask{-maxDepth - 1, a, b}, sortRange)
+	quickSortWorker(data, task{-maxDepth - 1, a, b}, sortRange)
 }
 
 // quickSortWorker is a parallel analogue of quickSort: it performs a pivot
 // and might asynchronously sort one of the halves if it's large enough.
-func quickSortWorker(dataI interface{}, task sortTask, sortRange func(sortTask)) {
-	maxDepth, a, b := 1-task.offs, task.pos, task.end
+func quickSortWorker(dataI interface{}, t task, sortRange func(task)) {
+	maxDepth, a, b := 1-t.offs, t.pos, t.end
 	data := dataI.(sort.Interface)
-	for b-a > MinOffload {
+	for b-a > minOffload {
 		if maxDepth == 0 {
 			heapSort(data, a, b)
 			return
@@ -247,10 +247,10 @@ func quickSortWorker(dataI interface{}, task sortTask, sortRange func(sortTask))
 		// Avoiding recursion on the larger subproblem guarantees
 		// a stack depth of at most lg(b-a).
 		if mlo-a < b-mhi {
-			sortRange(sortTask{-maxDepth - 1, a, mlo})
+			sortRange(task{-maxDepth - 1, a, mlo})
 			a = mhi // i.e., quickSortWorker(data, mhi, b)
 		} else {
-			sortRange(sortTask{-maxDepth - 1, mhi, b})
+			sortRange(task{-maxDepth - 1, mhi, b})
 			b = mlo // i.e., quickSortWorker(data, a, mlo)
 		}
 	}

@@ -22,6 +22,12 @@ func SetQSortCutoff(i int) int {
 	return orig
 }
 
+func SetMinOffload(i int) int {
+	orig := minOffload
+	minOffload = i
+	return orig
+}
+
 func Checking() bool {
 	return true
 }

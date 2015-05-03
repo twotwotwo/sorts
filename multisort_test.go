@@ -77,11 +77,10 @@ func manySort(a []int) {
 		myInts = append(myInts[:0], a...)
 
 		// make the parallel qsort extra parallel, as it were
-		var oldMinOffload = MinOffload
-		defer func() { MinOffload = oldMinOffload }()
-		MinOffload = 2 // 1 never hits Quicksort insertionSort
+		oldMinOffload := SetMinOffload(2) // 1 never hits Quicksort insertionSort
+		defer SetMinOffload(oldMinOffload) // in case of panic
 		Quicksort(myInts)
-		MinOffload = oldMinOffload
+		SetMinOffload(oldMinOffload) // for other sorts
 
 		myInts = append(myInts[:0], a...)
 		myInts.Sort()
