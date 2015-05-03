@@ -5,8 +5,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package sortutil sorts and searches common slice types, and offers
-// helper functions for sorting floats with radix sort.
+// Package sortutil sorts and searches common slice types (and helps sort
+// floats).
 package sortutil
 
 import (
@@ -16,30 +16,26 @@ import (
 	"sort"
 )
 
-// Float32Key generates a uint64 key from a float32. To sort float32s,
-// use this with Float32Less.
+// Float32Key generates a uint64 key from a float32. Use with Float32Less.
 func Float32Key(f float32) uint64 {
 	b := uint64(math.Float32bits(f)) << 32
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
 }
 
-// Float32Less compares float32s, sorting NaNs (which are normally
-// unsortable) to the end.
+// Float32Less compares float32s, treating NaN as greater than all numbers.
 func Float32Less(f, g float32) bool {
 	return Float32Key(f) < Float32Key(g)
 }
 
-// Float64Key generates a uint64 key from a float64. To sort float64s,
-// use this with Float64Less.
+// Float64Key generates a uint64 key from a float64. Use with Float64Less.
 func Float64Key(f float64) uint64 {
 	b := math.Float64bits(f)
 	b ^= ^(b>>63 - 1) | (1 << 63)
 	return b
 }
 
-// Float64Less compares float64s, sorting NaNs (which are normally
-// unsortable) to the end.
+// Float32Less compares float32s, treating NaN as greater than all numbers.
 func Float64Less(f, g float64) bool {
 	return Float64Key(f) < Float64Key(g)
 }
