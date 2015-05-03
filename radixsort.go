@@ -20,7 +20,7 @@ var qSortCutoff = 1 << 7
 
 const keyPanicMessage = "sort failed: Key and Less aren't consistent with each other"
 const keyUint64Help = " (for float data, sortutil Key functions may help resolve this)"
-const panicMessage = "sort failed: could be a data race, a radixsort bug, or a subtle bug in the interface implementation"
+const panicMessage = "sort failed: could be a data race, a bug in package sorts, or a subtle bug in the interface implementation"
 
 // maxRadixDepth limits how deeply the radix part of string sorts can
 // recurse before we bail to quicksort.  Each recursion uses 2KB stack.
