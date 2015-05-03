@@ -5,6 +5,7 @@
 package radixsort_test
 
 import . "github.com/twotwotwo/radixsort.test"
+import . "github.com/twotwotwo/radixsort.test/sortutil"
 import "strconv"
 import "sort"
 

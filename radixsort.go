@@ -7,6 +7,7 @@ package radixsort
 
 import (
 	"bytes"
+	"sort"
 )
 
 const radix = 8
@@ -18,7 +19,7 @@ const mask = (1 << radix) - 1
 var qSortCutoff = 1 << 7
 
 const keyPanicMessage = "sort failed: Key and Less aren't consistent with each other"
-const keyUint64Help = " (the [Uint64Type]Key functions like IntKey may help resolve this)"
+const keyUint64Help = " (for float data, sortutil Key functions may help resolve this)"
 const panicMessage = "sort failed: could be a data race, a radixsort bug, or a subtle bug in the interface implementation"
 
 // maxRadixDepth limits how deeply the radix part of string sorts can
@@ -47,6 +48,9 @@ func ByUint64(data Uint64Interface) {
 		}
 	}
 }
+
+// int64Key generates a uint64 from an int64
+func int64Key(i int64) uint64 { return uint64(i) ^ 1<<63 }
 
 // intwrapper tunrs an Int64Interface into a Uint64Interface for
 // guessIntShift
@@ -185,10 +189,10 @@ for laying out American flag sort
 
 // All three radixSort functions below do a counting pass and a swapping
 // pass, then recurse.  They fall back to comparison sort for small buckets
-// and equal ranges, and the int sort tries to skip bits that are identical
+// and equal ranges, and the int sorts try to skip bits that are identical
 // across the whole range being sorted.
 
-func radixSortUint64(dataI interface{}, t task, sortRange func(task)) {
+func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 	data := dataI.(Uint64Interface)
 	shift, a, b := uint(t.offs), t.pos, t.end
 	if b-a < qSortCutoff {
@@ -271,7 +275,7 @@ func radixSortUint64(dataI interface{}, t task, sortRange func(task)) {
 	}
 }
 
-func radixSortInt64(dataI interface{}, t task, sortRange func(task)) {
+func radixSortInt64(dataI sort.Interface, t task, sortRange func(task)) {
 	data := dataI.(Int64Interface)
 	shift, a, b := uint(t.offs), t.pos, t.end
 	if b-a < qSortCutoff {
@@ -354,7 +358,7 @@ func radixSortInt64(dataI interface{}, t task, sortRange func(task)) {
 	}
 }
 
-func radixSortString(dataI interface{}, t task, sortRange func(task)) {
+func radixSortString(dataI sort.Interface, t task, sortRange func(task)) {
 	data := dataI.(StringInterface)
 	offset, a, b := t.offs, t.pos, t.end
 	if offset < 0 {
@@ -416,7 +420,7 @@ func radixSortString(dataI interface{}, t task, sortRange func(task)) {
 	}
 }
 
-func radixSortBytes(dataI interface{}, t task, sortRange func(task)) {
+func radixSortBytes(dataI sort.Interface, t task, sortRange func(task)) {
 	data := dataI.(BytesInterface)
 	offset, a, b := t.offs, t.pos, t.end
 	if offset < 0 {

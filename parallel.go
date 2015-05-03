@@ -2,16 +2,17 @@ package radixsort
 
 import (
 	"runtime"
+	"sort"
 	"sync"
 )
 
 // helpers to coordinate parallel sorts
 
-type sortFunc func(interface{}, task, func(task))
+type sortFunc func(sort.Interface, task, func(task))
 
 // MaxProcs controls how many goroutines to start for large sorts. If 0,
 // GOMAXPROCS will be used; if 1, all sorts will be serial.
-var MaxProcs = 2
+var MaxProcs = 0
 
 // minParallel is the size of the smallest collection we will try to sort in
 // parallel.
@@ -27,14 +28,12 @@ var bufferRatio float32 = 1
 
 // parallelSort calls the sorters with an asyncSort function that will hand
 // the task off to another goroutine when possible.
-func parallelSort(data interface{}, sorter sortFunc, initialTask task) {
+func parallelSort(data sort.Interface, sorter sortFunc, initialTask task) {
 	max := runtime.GOMAXPROCS(0)
 	if MaxProcs > 0 && MaxProcs < max {
 		max = MaxProcs
 	}
-	l := data.(interface {
-		Len() int
-	}).Len()
+	l := data.Len()
 	if l < minParallel {
 		max = 1
 	}

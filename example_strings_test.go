@@ -8,12 +8,12 @@ package radixsort_test
 
 import (
 	"fmt"
-	"github.com/twotwotwo/radixsort.test"
+	"github.com/twotwotwo/radixsort.test/sortutil"
 )
 
 func Example_strings() {
 	groceries := []string{"peppers", "tortillas", "tomatoes", "cheese"}
-	radixsort.Strings(groceries) // or radixsort.Bytes([][]byte)
+	sortutil.Strings(groceries) // or sortutil.Bytes([][]byte)
 	fmt.Println(groceries)
 	// Output: [cheese peppers tomatoes tortillas]
 }

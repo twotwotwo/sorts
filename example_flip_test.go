@@ -9,12 +9,13 @@ package radixsort_test
 import (
 	"fmt"
 	"github.com/twotwotwo/radixsort.test"
+	"github.com/twotwotwo/radixsort.test/sortutil"
 )
 
 func Example_flip() {
 	scores := []int{39, 492, 4912, 39, -10, 4, 92}
-	data := radixsort.IntSlice(scores)
-	radixsort.ByInt64(data)
+	data := sortutil.IntSlice(scores)
+	data.Sort()
 	radixsort.Flip(data) // high scores first
 	fmt.Println(scores)
 	// Output: [4912 492 92 39 39 4 -10]

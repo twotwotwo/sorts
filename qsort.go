@@ -234,9 +234,8 @@ func qSortPar(data sort.Interface, t task, sortRange func(task)) {
 
 // quickSortWorker is a parallel analogue of quickSort: it performs a pivot
 // and might asynchronously sort one of the halves if it's large enough.
-func quickSortWorker(dataI interface{}, t task, sortRange func(task)) {
+func quickSortWorker(data sort.Interface, t task, sortRange func(task)) {
 	maxDepth, a, b := 1-t.offs, t.pos, t.end
-	data := dataI.(sort.Interface)
 	for b-a > minOffload {
 		if maxDepth == 0 {
 			heapSort(data, a, b)
@@ -259,9 +258,4 @@ func quickSortWorker(dataI interface{}, t task, sortRange func(task)) {
 	} else if b-a > 1 {
 		insertionSort(data, a, b)
 	}
-}
-
-// IsSorted determines whether data is sorted.
-func IsSorted(data sort.Interface) bool {
-	return sort.IsSorted(data)
 }
