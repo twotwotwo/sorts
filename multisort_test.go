@@ -28,10 +28,10 @@ func forceRadix(f func()) {
 	f()
 }
 
-// convertInts turns a []int of only positive numbers into a [][]byte and a
-// []string ordered the same way, for exercising the string and []byte
-// sorts.
-func convertInts(a []int) ([][]byte, []string) { // and let's be honest it ain't no masterpiece either
+// convertInts turns a []int of only positive numbers into a [][]byte, a
+// []string, and a []uint ordered the same way, for exercising all of the
+// underlying type-specific sort code.
+func convertInts(a []int) ([][]byte, []string, []uint) {
 	const l = 20 // length of converted number
 	outSpace := make([]byte, l*len(a))
 	for i := range outSpace {
@@ -55,24 +55,30 @@ func convertInts(a []int) ([][]byte, []string) { // and let's be honest it ain't
 		outStrings[i] = strSpace[l*i : l*i+l]
 	}
 
-	return outBytes, outStrings
+	outUints := make([]uint, len(a))
+	for i := range outUints {
+		outUints[i] = uint(a[i])
+	}
+
+	return outBytes, outStrings, outUints
 }
 
 // multiSort sorts incoming integers using integer, []byte, and string sorts.
 func multiSort(a []int) {
-	asBytes, asStrings := convertInts(a)
+	asBytes, asStrings, asUints := convertInts(a)
 	IntSlice(a).Sort()
 	BytesSlice(asBytes).Sort()
 	StringSlice(asStrings).Sort()
+	UintSlice(asUints).Sort()
 }
 
 // manySort sorts integers with all QSort cutoffs and all data types, saving
 // the sorted ints back to a and relying on the sorted checks for the other
 // sorts.  (It also throws away just tons of RAM but not sure we care.)
 func manySort(a []int) {
-	aBytes, aStrings := convertInts(a)
+	aBytes, aStrings, aUints := convertInts(a)
 
-	myInts, myBytes, myStrings := IntSlice{}, BytesSlice{}, StringSlice{}
+	myInts, myUints, myBytes, myStrings := IntSlice{}, UintSlice{}, BytesSlice{}, StringSlice{}
 	varyQSortCutoff(func() {
 		myInts = append(myInts[:0], a...)
 
@@ -88,6 +94,8 @@ func manySort(a []int) {
 		myBytes.Sort()
 		myStrings = append(myStrings[:0], aStrings...)
 		myStrings.Sort()
+		myUints = append(myUints[:0], aUints...)
+		myUints.Sort()
 	})
 	// caller wants to see the sorted ints
 	copy(a, myInts)

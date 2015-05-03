@@ -310,6 +310,10 @@ type unsortableInts struct{ IntSlice }
 
 func (u unsortableInts) Less(i, j int) bool { return j&1 == 1 }
 
+type unsortableUints struct{ UintSlice }
+
+func (u unsortableUints) Less(i, j int) bool { return j&1 == 1 }
+
 type unsortableStrings struct{ StringSlice }
 
 func (u unsortableStrings) Less(i, j int) bool { return j&1 == 1 }
@@ -322,6 +326,10 @@ func (u unsortableBytes) Less(i, j int) bool { return j&1 == 1 }
 type miskeyedInts struct{ IntSlice }
 
 func (u miskeyedInts) Less(i, j int) bool { return u.IntSlice[j] < u.IntSlice[i] }
+
+type miskeyedUints struct{ UintSlice }
+
+func (u miskeyedUints) Less(i, j int) bool { return u.UintSlice[j] < u.UintSlice[i] }
 
 type miskeyedStrings struct{ StringSlice }
 
@@ -346,6 +354,9 @@ func TestSortCheck(t *testing.T) {
 	mustPanic(t, "unsortableInts", func() {
 		ByInt64(unsortableInts{IntSlice{1, 1, 1}})
 	})
+	mustPanic(t, "unsortableUints", func() {
+		ByUint64(unsortableUints{UintSlice{1, 1, 1}})
+	})
 	mustPanic(t, "unsortableStrings", func() {
 		ByString(unsortableStrings{StringSlice{"", "", ""}})
 	})
@@ -355,6 +366,11 @@ func TestSortCheck(t *testing.T) {
 	mustPanic(t, "miskeyedInts", func() {
 		forceRadix(func() {
 			ByInt64(miskeyedInts{IntSlice{1, 2, 3}})
+		})
+	})
+	mustPanic(t, "miskeyedUints", func() {
+		forceRadix(func() {
+			ByUint64(miskeyedUints{UintSlice{1, 2, 3}})
 		})
 	})
 	mustPanic(t, "miskeyedStrings", func() {
@@ -629,7 +645,7 @@ func TestBackshift(t *testing.T) {
 	if GuessIntShift(funny, len(funny)) > 0 {
 		panic("guessIntShift got smarter")
 	}
-	forceRadix(funny.Sort)
+	forceRadix(func() { multiSort(funnyData[:]) })
 	if !sort.IsSorted(funny) {
 		t.Errorf("backshift data didn't sort")
 	}
@@ -639,8 +655,9 @@ func TestBackshift(t *testing.T) {
 // the middle; it might catch if it broke the sort.
 func TestFwdShift(t *testing.T) {
 	// an upper bit varies, lower byte varies, but bytes in between don't
-	funny := IntSlice([]int{0x40000000, 23, 59, 38, 38, 6, 12, 9, 3, 4, 1, 49, 9, 63})
-	forceRadix(funny.Sort)
+	funnyData := []int{0x40000000, 23, 59, 38, 38, 6, 12, 9, 3, 4, 1, 49, 9, 63}
+	funny := IntSlice(funnyData)
+	forceRadix(func() { multiSort(funnyData) })
 	if !sort.IsSorted(funny) {
 		t.Errorf("forward-shift data didn't sort")
 	}
