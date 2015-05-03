@@ -5,7 +5,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package radixsort_test
+package sorts_test
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"testing"
 
-	. "github.com/twotwotwo/radixsort.test"
-	. "github.com/twotwotwo/radixsort.test/sortutil"
+	. "github.com/twotwotwo/sorts"
+	. "github.com/twotwotwo/sorts/sortutil"
 )
 
 // check the IsSorted checks with a type that will never look sorted

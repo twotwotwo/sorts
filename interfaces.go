@@ -5,10 +5,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package radixsort does parallel radix sorts of data by (u)int64, string,
-// or []byte keys, and parallel quicksort.  See radixsort/sortutil for
+// Package sorts does parallel radix sorts of data by (u)int64, string, or
+// []byte keys, and parallel quicksort.  See the sortutil package for
 // shortcuts for common slice types and help sorting floats.
-package radixsort
+package sorts
 
 import "sort" // for Interface
 

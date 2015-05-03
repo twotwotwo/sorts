@@ -4,12 +4,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package radixsort_test
+package sorts_test
 
 import (
 	"fmt"
-	"github.com/twotwotwo/radixsort.test"
-	"github.com/twotwotwo/radixsort.test/sortutil"
+	"github.com/twotwotwo/sorts"
+	"github.com/twotwotwo/sorts/sortutil"
 )
 
 type City struct {
@@ -47,7 +47,7 @@ func Example() {
 	}
 
 	fmt.Println(cities)
-	radixsort.ByUint64(ByLatitude(cities))
+	sorts.ByUint64(ByLatitude(cities))
 	fmt.Println(cities)
 
 	// Output:

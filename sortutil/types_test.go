@@ -8,7 +8,7 @@
 package sortutil_test
 
 import (
-	. "github.com/twotwotwo/radixsort.test/sortutil"
+	. "github.com/twotwotwo/sorts/sortutil"
 	"math"
 	"sort"
 	"testing"
