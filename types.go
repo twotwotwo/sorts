@@ -5,75 +5,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package radixsort sorts data using (u)int64, string, or []byte keys, with
-// helpers for sorting floats.
 package radixsort
 
 import (
 	"bytes"
 	"math"
-	"sort" // for Interface
 )
-
-// Uint64Interface represents a collection that can be sorted by a uint64
-// key.
-type Uint64Interface interface {
-	// Len is the number of elements in the collection.
-	Len() int
-	// Less reports whether the element with index i should sort before
-	// the element with index j.  To implement it for floating-point
-	// numbers, use Float32Less or Float64Less.
-	Less(i, j int) bool
-	// Swap swaps the elements with indexes i and j.
-	Swap(i, j int)
-	// Key provides a uint64 key for element i.
-	Key(i int) uint64
-}
-
-// Int64Interface represents a collection that can be sorted by an int64
-// key.
-type Int64Interface interface {
-	// Len is the number of elements in the collection.
-	Len() int
-	// Less reports whether the element with index i should sort before
-	// the element with index j.  To implement it for floating-point
-	// numbers, use Float32Less or Float64Less.
-	Less(i, j int) bool
-	// Swap swaps the elements with indexes i and j.
-	Swap(i, j int)
-	// Key provides a uint64 key for element i. To implement it for
-	// signed or floating-point data, use the helper functions like
-	// Int32Key.
-	Key(i int) int64
-}
-
-// StringInterface represents a collection that can be sorted by a string
-// key.
-type StringInterface interface {
-	// Len is the number of elements in the collection.
-	Len() int
-	// Less reports whether the element with
-	// index i should sort before the element with index j.
-	Less(i, j int) bool
-	// Swap swaps the elements with indexes i and j.
-	Swap(i, j int)
-	// Key provides the string key for element i.
-	Key(i int) string
-}
-
-// BytesInterface represents a collection that can be sorted by a []byte
-// key.
-type BytesInterface interface {
-	// Len is the number of elements in the collection.
-	Len() int
-	// Less reports whether the element with
-	// index i should sort before the element with index j.
-	Less(i, j int) bool
-	// Swap swaps the elements with indexes i and j.
-	Swap(i, j int)
-	// Key provides the []byte key for element i.
-	Key(i int) []byte
-}
 
 const signBit = uint64(^uint(0) ^ (^uint(0))>>1) // works f/any int size
 
@@ -106,16 +43,6 @@ func Float64Key(f float64) uint64 {
 // unsortable) to the end.
 func Float64Less(f, g float64) bool {
 	return Float64Key(f) < Float64Key(g)
-}
-
-// Flip reverses the order of items in a sort.Interface.
-func Flip(data sort.Interface) {
-	a, b := 0, data.Len()-1
-	for b > a {
-		data.Swap(a, b)
-		a++
-		b--
-	}
 }
 
 // IntSlice attaches the methods of Int64Interface to []int, sorting in increasing order.
