@@ -19,7 +19,7 @@ http://godoc.org/github.com/twotwotwo/sorts
 
 There's no Reverse(), but sorts.Flip(data) will flip ascending-sorted
 data to descending.  There's no stable sort.  The string sorts just compare
-byte values; so é won't sort next to e.  Set sorts.MaxProcs if you want to 
+byte values; é won't sort next to e.  Set sorts.MaxProcs if you want to 
 limit concurrency. The package checks that data is sorted after every run 
 and panics(!) if not.
 
