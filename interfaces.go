@@ -24,7 +24,7 @@ type Uint64Interface interface {
 // key.
 type Int64Interface interface {
 	sort.Interface
-	// Key provides a uint64 key for element i.
+	// Key provides an int64 key for element i.
 	Key(i int) int64
 }
 
