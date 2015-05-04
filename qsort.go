@@ -11,13 +11,12 @@ import (
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This copies of code from sort.go because we can't use something like
+// This copies code from Go's sort.go because we can't use something like
 // sort.SortRange(data, a, b) to sort a range of data.  Wrapping incoming
 // data in another sort.Interface is possible, but kills speed.
-
-// There's a small change to medianOfThree that reduces Swaps (though I
-// didn't see a clear improvement on benchmarks from it) and this exports an
-// IsSorted that just calls stdlib sort's, for convenience.
+// 
+// There's a small change to medianOfThree that reduces Swap calls (though
+// I didn't see a clear improvement on benchmarks from it).
 
 func min(a, b int) int {
 	if a < b {
