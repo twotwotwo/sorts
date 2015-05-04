@@ -8,7 +8,8 @@ sorts common slice types and adds functions to help sort floats.
 
 Usually, stick to stdlib sort: that's fast, standard, and simpler.  But this
 package may help if sorting huge datasets is a bottleneck for you.  Try it
-if shorter sort times seem worth some hassle in your application.
+if shorter sort times seem worth some hassle in your application. To get a
+sense of the potential gains, [some timings are available](https://docs.google.com/spreadsheets/d/1GkXMLXQ7oW5Bp0qwyYw0IiQElIq8B-IvNEYE_RPCTvA/edit#gid=0).
 
 To radix sort, 
 [implement sort.Interface](http://golang.org/pkg/sort/#Interface) 
