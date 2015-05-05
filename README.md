@@ -23,5 +23,9 @@ byte values; é won't sort next to e.  Set sorts.MaxProcs if you want to
 limit concurrency. The package checks that data is sorted after every run 
 and panics(!) if not.
 
+Credit (but no blame, or claim of endorsement) to the authors of stdlib sort; 
+this uses its qSort, tests, and interface, and the readability of its code 
+helped make this possible.
+
 I'd love to hear if you're using this. E-mail me at my github username at
 GMail, or say hey on Twitter ([@rf](http://twitter.com/rf/)).
