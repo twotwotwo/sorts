@@ -219,6 +219,8 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 	// skip past common prefixes, bail if all keys equal
 	diff := min ^ max
 	if diff == 0 {
+		// RF: precheck if "sorted" (probably: equal) before running this?
+		qSort(data, a, b)
 		return
 	}
 	if diff>>shift == 0 || diff>>(shift+radix) != 0 {
@@ -258,7 +260,14 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 	}
 
 	if shift == 0 {
-		// each bucket is a unique key
+		pos = a
+		for _, end := range bucketEnds {
+			if end > pos+1 {
+				// RF: precheck if "sorted" (probably: equal) before running this?
+				qSort(data, pos, end)
+			}
+			pos = end
+		}
 		return
 	}
 
