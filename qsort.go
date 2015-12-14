@@ -14,9 +14,6 @@ import (
 // This copies code from Go's sort.go because we can't use something like
 // sort.SortRange(data, a, b) to sort a range of data.  Wrapping incoming
 // data in another sort.Interface is possible, but kills speed.
-// 
-// There's a small change to medianOfThree that reduces Swap calls (though
-// I didn't see a clear improvement on benchmarks from it).
 
 func min(a, b int) int {
 	if a < b {
@@ -71,33 +68,21 @@ func heapSort(data sort.Interface, a, b int) {
 	}
 }
 
-// Quicksort, following Bentley and McIlroy,
-// ``Engineering a Sort Function,'' SP&E November 1993.
-
-// medianOfThree returns the middle of the three indicies
-func medianOfThree(data sort.Interface, a, b, c int) (med int) {
-	// If only one of a<b and a<c is true, a is the median. If only one
-	// of a<c and b<c is true, c is the median. Otherwise, it's b.
-
-	c0, c1 := data.Less(a, b), data.Less(a, c)
-	// if c0 && !c1, then c <= a < b   (c <= a because !c1, a < b because c0)
-	// if !c0 && c1, then b <= a < c   (b <= a because !c0, a < c because c1)
-	if c0 != c1 {
-		return a
+// medianOfThree moves the median of the three values data[m0], data[m1], data[m2] into data[m1].
+func medianOfThree(data sort.Interface, m1, m0, m2 int) {
+	// sort 3 elements
+	if data.Less(m1, m0) {
+		data.Swap(m1, m0)
 	}
-
-	c2 := data.Less(b, c)
-	// if c1 && !c2, then a < c <= b   (a < c because c1, c <= b because !c2)
-	// if !c1 && c2, then b < c <= a   (b < c because c2, c <= a because !c1)
-	if c1 != c2 {
-		return c
+	// data[m0] <= data[m1]
+	if data.Less(m2, m1) {
+		data.Swap(m2, m1)
+		// data[m0] <= data[m2] && data[m1] < data[m2]
+		if data.Less(m1, m0) {
+			data.Swap(m1, m0)
+		}
 	}
-
-	// if neither c0 != c1 or c1 != c2, c0 == c1 == c2.
-	// and c0 == c2 leaves two possibilities:
-	// if c0 && c2, then a < b < c        (a < b because c0, b < c because c2)
-	// if !(c0 || c2), then c <= b <= a   (c <= b because !c2, b <= a because !c0)
-	return b
+	// now data[m0] <= data[m1] <= data[m2]
 }
 
 func swapRange(data sort.Interface, a, b, n int) {
@@ -108,71 +93,93 @@ func swapRange(data sort.Interface, a, b, n int) {
 
 func doPivot(data sort.Interface, lo, hi int) (midlo, midhi int) {
 	m := lo + (hi-lo)/2 // Written like this to avoid integer overflow.
-	m1, m2, m3 := lo, m, hi-1
 	if hi-lo > 40 {
 		// Tukey's ``Ninther,'' median of three medians of three.
 		s := (hi - lo) / 8
-		m1 = medianOfThree(data, lo, lo+s, lo+2*s)
-		m2 = medianOfThree(data, m, m-s, m+s)
-		m3 = medianOfThree(data, hi-1, hi-1-s, hi-1-2*s)
+		medianOfThree(data, lo, lo+s, lo+2*s)
+		medianOfThree(data, m, m-s, m+s)
+		medianOfThree(data, hi-1, hi-1-s, hi-1-2*s)
 	}
-	data.Swap(lo, medianOfThree(data, m1, m2, m3))
+	medianOfThree(data, lo, m, hi-1)
 
 	// Invariants are:
-	//    data[lo] = pivot (set up by ChoosePivot)
-	//    data[lo <= i < a] = pivot
-	//    data[a <= i < b] < pivot
-	//    data[b <= i < c] is unexamined
-	//    data[c <= i < d] > pivot
-	//    data[d <= i < hi] = pivot
-	//
-	// Once b meets c, can swap the "= pivot" sections
-	// into the middle of the slice.
+	//	data[lo] = pivot (set up by ChoosePivot)
+	//	data[lo < i < a] < pivot
+	//	data[a <= i < b] <= pivot
+	//	data[b <= i < c] unexamined
+	//	data[c <= i < hi-1] > pivot
+	//	data[hi-1] >= pivot
 	pivot := lo
-	a, b, c, d := lo+1, lo+1, hi, hi
+	a, c := lo+1, hi-1
+
+	for ; a != c && data.Less(a, pivot); a++ {
+	}
+	b := a
 	for {
-		for b < c {
-			if data.Less(b, pivot) { // data[b] < pivot
-				b++
-			} else if !data.Less(pivot, b) { // data[b] = pivot
-				data.Swap(a, b)
-				a++
-				b++
-			} else {
-				break
-			}
+		for ; b != c && !data.Less(pivot, b); b++ { // data[b] <= pivot
 		}
-		for b < c {
-			if data.Less(pivot, c-1) { // data[c-1] > pivot
-				c--
-			} else if !data.Less(c-1, pivot) { // data[c-1] = pivot
-				data.Swap(c-1, d-1)
-				c--
-				d--
-			} else {
-				break
-			}
+		for ; b != c && data.Less(pivot, c-1); c-- { // data[c-1] > pivot
 		}
-		if b >= c {
+		if b == c {
 			break
 		}
-		// data[b] > pivot; data[c-1] < pivot
+		// data[b] > pivot; data[c-1] <= pivot
 		data.Swap(b, c-1)
 		b++
 		c--
 	}
-
-	n := min(b-a, a-lo)
-	swapRange(data, lo, b-n, n)
-
-	n = min(hi-d, d-c)
-	swapRange(data, c, hi-n, n)
-
-	return lo + b - a, hi - (d - c)
+	// If hi-c<3 then there are duplicates (by property of median of nine).
+	// Let be a bit more conservative, and set border to 5.
+	protect := hi-c < 5
+	if !protect && hi-c < (hi-lo)/4 {
+		// Lets test some points for equality to pivot
+		dups := 0
+		if !data.Less(pivot, hi-1) { // data[hi-1] = pivot
+			data.Swap(c, hi-1)
+			c++
+			dups++
+		}
+		if !data.Less(b-1, pivot) { // data[b-1] = pivot
+			b--
+			dups++
+		}
+		// m-lo = (hi-lo)/2 > 6
+		// b-lo > (hi-lo)*3/4-1 > 8
+		// ==> m < b ==> data[m] <= pivot
+		if !data.Less(m, pivot) { // data[m] = pivot
+			data.Swap(m, b-1)
+			b--
+			dups++
+		}
+		// if at least 2 points are equal to pivot, assume skewed distribution
+		protect = dups > 1
+	}
+	if protect {
+		// Protect against a lot of duplicates
+		// Add invariant:
+		//	data[a <= i < b] unexamined
+		//	data[b <= i < c] = pivot
+		for {
+			for ; a != b && !data.Less(b-1, pivot); b-- { // data[b] == pivot
+			}
+			for ; a != b && data.Less(a, pivot); a++ { // data[a] < pivot
+			}
+			if a == b {
+				break
+			}
+			// data[a] == pivot; data[b-1] < pivot
+			data.Swap(a, b-1)
+			a++
+			b--
+		}
+	}
+	// Swap pivot into middle
+	data.Swap(pivot, b-1)
+	return b - 1, c
 }
 
 func quickSort(data sort.Interface, a, b, maxDepth int) {
-	for b-a > 7 {
+	for b-a > 12 {
 		if maxDepth == 0 {
 			heapSort(data, a, b)
 			return
@@ -190,6 +197,13 @@ func quickSort(data sort.Interface, a, b, maxDepth int) {
 		}
 	}
 	if b-a > 1 {
+		// Do ShellSort pass with gap 6
+		// It could be written in this simplified form cause b-a <= 12
+		for i := a + 6; i < b; i++ {
+			if data.Less(i, i-6) {
+				data.Swap(i, i-6)
+			}
+		}
 		insertionSort(data, a, b)
 	}
 }
