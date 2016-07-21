@@ -15,13 +15,6 @@ import (
 // sort.SortRange(data, a, b) to sort a range of data.  Wrapping incoming
 // data in another sort.Interface is possible, but kills speed.
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // Insertion sort
 func insertionSort(data sort.Interface, a, b int) {
 	for i := a + 1; i < b; i++ {
@@ -83,12 +76,6 @@ func medianOfThree(data sort.Interface, m1, m0, m2 int) {
 		}
 	}
 	// now data[m0] <= data[m1] <= data[m2]
-}
-
-func swapRange(data sort.Interface, a, b, n int) {
-	for i := 0; i < n; i++ {
-		data.Swap(a+i, b+i)
-	}
 }
 
 func doPivot(data sort.Interface, lo, hi int) (midlo, midhi int) {
