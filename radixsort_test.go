@@ -536,6 +536,58 @@ func bench(b *testing.B, size int, algo func(sort.Interface), name string) {
 	}
 }
 
+// This is based on the "antiquicksort" implementation by M. Douglas McIlroy.
+// See http://www.cs.dartmouth.edu/~doug/mdmspe.pdf for more info.
+type adversaryTestingData struct {
+	data      []int
+	keys      map[int]int
+	candidate int
+}
+
+func (d *adversaryTestingData) Len() int { return len(d.data) }
+
+func (d *adversaryTestingData) Less(i, j int) bool {
+	if _, present := d.keys[i]; !present {
+		if _, present := d.keys[j]; !present {
+			if i == d.candidate {
+				d.keys[i] = len(d.keys)
+			} else {
+				d.keys[j] = len(d.keys)
+			}
+		}
+	}
+
+	if _, present := d.keys[i]; !present {
+		d.candidate = i
+		return false
+	}
+	if _, present := d.keys[j]; !present {
+		d.candidate = j
+		return true
+	}
+
+	return d.keys[i] >= d.keys[j]
+}
+
+func (d *adversaryTestingData) Swap(i, j int) {
+	d.data[i], d.data[j] = d.data[j], d.data[i]
+}
+
+func TestAdversary(t *testing.T) {
+	const size = 100
+	data := make([]int, size)
+	for i := 0; i < size; i++ {
+		data[i] = i
+	}
+
+	d := &adversaryTestingData{data, make(map[int]int), 0}
+	Quicksort(d) // This should degenerate to heapsort.
+	defer SetMinOffload(SetMinOffload(1))
+	d = &adversaryTestingData{data, make(map[int]int), 0}
+	Quicksort(d)
+}
+
+
 func BenchmarkSort1e2(b *testing.B) { bench(b, 1e2, byInt64Wrapper, "Sort") }
 func BenchmarkSort1e4(b *testing.B) { bench(b, 1e4, byInt64Wrapper, "Sort") }
 func BenchmarkSort1e6(b *testing.B) { bench(b, 1e6, byInt64Wrapper, "Sort") }
