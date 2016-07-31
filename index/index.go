@@ -8,18 +8,17 @@
 package index
 
 import (
+	"bytes"
 	"sort"
+	"strings"
 
 	"github.com/twotwotwo/sorts"
 )
 
 type Index struct {
-	Keys      []uint64
-	Summary   []uint64 // implicit B-tree, if Summarize() was called
-	Data      sort.Interface
-	// intereted in these but not ready yet
-	// Offset    int // index subslice where keys[0] is data[Offset]
-	// KeyOffset int // for string keys that are 8th-15th bytes not 0-7th
+	Keys    []uint64
+	Summary []uint64 // implicit B-tree, if Summarize() was called
+	Data    sort.Interface
 }
 
 // Len returns the length of the data underlying an Index
@@ -67,24 +66,157 @@ func (idx *Index) Summarize() {
 	idx.Summary = summary
 }
 
-// FindKey finds the position of the first item >= key in Keys, returning
-// one after the end if there is none, and possibly using Summary for a
-// speedup.  To find a range equal to k, you might use the range from
-// FindKey(k) up to but not including FindKey(k+1) (with a special case
-// using idx.Len() for k==^uint64(0), if relevant).  When different values
-// map to the same key, you might want to sort.Search within the range to
-// narrow your result down to the desired values.
-func (idx *Index) FindKey(key uint64) int {
+// FindUint64 finds the position of the first item >= key in Keys, returning
+// one after the end if there is none.  When different values map to the same key,
+// you might want to sort.Search within the returned range to narrow your result
+// down to the desired values.
+func (idx *Index) FindUint64(key uint64) int {
 	if idx.Summary != nil {
-		return idx.findKeySummary(key)
+		return idx.findUint64Summary(key)
 	}
 	return sort.Search(idx.Len(), func(i int) bool { return idx.Keys[i] >= key })
 }
 
-// RF: awkwardness of docs above makes it mighty tempting to provide
-// FindKeyRange and special cases for StringInterface and BytesInterface.
+// Compares string a to []byte b, returning -1 if a<b, 0 if a==b, and 1 if a>b.
+func CompareStringToBytes(a string, b []byte) int {
+	for i := range b {
+		if i > len(a) {
+			return -1
+		}
+		if b[i] > a[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+	if len(a) > len(b) {
+		return 1
+	}
+	return 0
+}
 
-func (idx *Index) findKeySummary(key uint64) int {
+// CompareBytesToString is a convenience wrapper for CompareStringToBytes.
+func CompareBytesToString(a []byte, b string) int {
+	return -CompareStringToBytes(b, a)
+}
+
+// FindString finds the first item >= key, returning one after the end if there
+// is none. The collection type must implement Key(i) returning string or []byte.
+func (idx *Index) FindString(key string) int {
+	k := StringKey(key)
+	a, b := idx.FindUint64Range(k)
+	switch data := idx.Data.(type) {
+	case sorts.StringInterface:
+		return a + sort.Search(b-a, func(i int) bool {
+			return strings.Compare(key, data.Key(a+i)) >= 0
+		})
+	case sorts.BytesInterface:
+		return a + sort.Search(b-a, func(i int) bool {
+			return CompareStringToBytes(key, data.Key(a+i)) >= 0
+		})
+	default:
+		panic("to use FindStringKey, Data.Key(i) must return string or []byte")
+	}
+}
+
+// FindBytes finds the first item >= key, returning one after the end if there
+// is none. The collection type must implement Key(i) returning string or []byte.
+func (idx *Index) FindBytes(key []byte) int {
+	k := BytesKey(key)
+	a, b := idx.FindUint64Range(k)
+	switch data := idx.Data.(type) {
+	case sorts.StringInterface:
+		return a + sort.Search(b-a, func(i int) bool {
+			return CompareBytesToString(key, data.Key(a+i)) >= 0
+		})
+	case sorts.BytesInterface:
+		offset := sort.Search(b-a, func(i int) bool {
+			return bytes.Compare(key, data.Key(a+i)) >= 0
+		})
+		return a + offset
+	default:
+		panic("to use FindBytesKey, Data.Key(i) must return string or []byte")
+	}
+}
+
+// FindUint64Range looks for a range of keys such that all items in idx.Keys[a:b]
+// equal key.
+// It can return an empty range if the item isn't found; in that case, a and b are both where the item would be inserted (and can be one past the end).
+// To find a single key, use FindUint64.
+func (idx *Index) FindUint64Range(key uint64) (a, b int) {
+	a = idx.FindUint64(key)
+	if a == len(idx.Keys) || idx.Keys[a] != key {
+		// key not found, needn't search again
+		return a, a
+	}
+	if key == ^uint64(0) { // would overflow
+		b = len(idx.Keys)
+	} else {
+		b = idx.FindUint64(key + 1)
+	}
+	return
+}
+
+// FindStringRange(key) finds the range (a,b] such that Key() returns key for all items in idx.Data[a:b].
+// It can return an empty range if the item isn't found; in that case, a and b are both where the item would be inserted (and can be one past the end).
+// Data must implement Key(i) returning string or []byte.
+// To find a single item, use FindString.
+func (idx *Index) FindStringRange(key string) (int, int) {
+	k := StringKey(key)
+	a, b := idx.FindUint64Range(k)
+	switch data := idx.Data.(type) {
+	case sorts.StringInterface:
+		aa := a + sort.Search(b-a, func(i int) bool {
+			return strings.Compare(key, data.Key(a+i)) >= 0
+		})
+		bb := aa + sort.Search(b-aa, func(i int) bool {
+			return strings.Compare(key, data.Key(aa+i)) > 0
+		})
+		return aa, bb
+	case sorts.BytesInterface:
+		aa := a + sort.Search(b-a, func(i int) bool {
+			return CompareStringToBytes(key, data.Key(a+i)) >= 0
+		})
+		bb := aa + sort.Search(b-aa, func(i int) bool {
+			return CompareStringToBytes(key, data.Key(aa+i)) > 0
+		})
+		return aa, bb
+	default:
+		panic("to use FindStringRange, Data.Key(i) must return string or []byte")
+	}
+}
+
+// FindBytesRange(key) finds the range (a,b] such that Key() returns key for all items in idx.Data[a:b].
+// It can return an empty range if the item isn't found; in that case, a is where the item would be inserted (and can be one past the end).
+// Data must implement Key(i) returning string or []byte.
+// To find a single item, use FindBytes.
+func (idx *Index) FindBytesRange(key []byte) (int, int) {
+	k := BytesKey(key)
+	a, b := idx.FindUint64Range(k)
+	switch data := idx.Data.(type) {
+	case sorts.StringInterface:
+		aa := a + sort.Search(b-a, func(i int) bool {
+			return CompareBytesToString(key, data.Key(a+i)) >= 0
+		})
+		bb := aa + sort.Search(b-aa, func(i int) bool {
+			return CompareBytesToString(key, data.Key(aa+i)) > 0
+		})
+		return aa, bb
+	case sorts.BytesInterface:
+		aa := a + sort.Search(b-a, func(i int) bool {
+			return bytes.Compare(key, data.Key(a+i)) >= 0
+		})
+		bb := aa + sort.Search(b-aa, func(i int) bool {
+			return bytes.Compare(key, data.Key(aa+i)) > 0
+		})
+		return aa, bb
+	default:
+		panic("to use FindStringRangeExact, Data.Key(i) must return string or []byte")
+	}
+}
+
+func (idx *Index) findUint64Summary(key uint64) int {
 	summary := idx.Summary
 	keys := idx.Keys
 
@@ -149,13 +281,6 @@ func (idx *Index) findKeySummary(key uint64) int {
 	return offset + i
 }
 
-// A type satisfying KeySetter can fill a []uint64 with numeric sort keys
-// for its items.  Distinct values may map to the same integer key; Less
-// is used as a tiebreaker.
-type KeySetter interface {
-	SetKeys([]uint64)
-}
-
 // StringKey generates a uint64 key from the first bytes of key.
 func StringKey(key string) uint64 {
 	k := uint64(0)
@@ -186,8 +311,6 @@ func SortWithIndex(data sort.Interface) *Index {
 		Data: data,
 	}
 	switch data := data.(type) {
-	case KeySetter:
-		data.SetKeys(idx.Keys)
 	case sorts.StringInterface:
 		for i := 0; i < l; i++ {
 			key := data.Key(i)
