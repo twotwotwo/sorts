@@ -35,10 +35,15 @@ type task struct{ offs, pos, end int }
 // ByUint64 sorts data by a uint64 key.
 func ByUint64(data Uint64Interface) {
 	l := data.Len()
+	if l < qSortCutoff {
+		qSort(data, 0, l)
+		return
+	}
+	
 	shift := guessIntShift(data, l)
 	parallelSort(data, radixSortUint64, task{offs: int(shift), end: l})
 
-	// check results!
+	// check results if we radix sorted!
 	for i := 1; i < l; i++ {
 		if data.Less(i, i-1) {
 			if data.Key(i) > data.Key(i-1) {
@@ -63,6 +68,11 @@ func (iw intwrapper) Key(i int) uint64 {
 // ByInt64 sorts data by an int64 key.
 func ByInt64(data Int64Interface) {
 	l := data.Len()
+	if l < qSortCutoff {
+		qSort(data, 0, l)
+		return
+	}
+
 	shift := guessIntShift(intwrapper{data}, l)
 	parallelSort(data, radixSortInt64, task{offs: int(shift), end: l})
 
@@ -80,9 +90,14 @@ func ByInt64(data Int64Interface) {
 // ByString sorts data by a string key.
 func ByString(data StringInterface) {
 	l := data.Len()
+	if l < qSortCutoff {
+		qSort(data, 0, l)
+		return
+	}
+
 	parallelSort(data, radixSortString, task{end: l})
 
-	// check results!
+	// check results if we radix sorted!
 	for i := 1; i < l; i++ {
 		if data.Less(i, i-1) {
 			if data.Key(i) > data.Key(i-1) {
@@ -96,9 +111,14 @@ func ByString(data StringInterface) {
 // ByBytes sorts data by a []byte key.
 func ByBytes(data BytesInterface) {
 	l := data.Len()
+	if l < qSortCutoff {
+		qSort(data, 0, l)
+		return
+	}
+
 	parallelSort(data, radixSortBytes, task{end: l})
 
-	// check results!
+	// check results if we radix sorted!
 	for i := 1; i < l; i++ {
 		if data.Less(i, i-1) {
 			if bytes.Compare(data.Key(i), data.Key(i-1)) > 0 {
@@ -115,9 +135,6 @@ func ByBytes(data BytesInterface) {
 // returns too small a shift and the sort notices after one useless counting
 // pass.
 func guessIntShift(data Uint64Interface, l int) uint {
-	if l < qSortCutoff {
-		return 64 - radix
-	}
 	step := l >> 5
 	if l > 1<<16 {
 		step = l >> 8
@@ -219,8 +236,7 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 	// skip past common prefixes, bail if all keys equal
 	diff := min ^ max
 	if diff == 0 {
-		// RF: precheck if "sorted" (probably: equal) before running this?
-		qSort(data, a, b)
+		qSortEqualKeyRange(data, a, b)
 		return
 	}
 	if diff>>shift == 0 || diff>>(shift+radix) != 0 {
@@ -263,8 +279,7 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 		pos = a
 		for _, end := range bucketEnds {
 			if end > pos+1 {
-				// RF: precheck if "sorted" (probably: equal) before running this?
-				qSort(data, pos, end)
+				qSortEqualKeyRange(data, pos, end)
 			}
 			pos = end
 		}
@@ -311,6 +326,7 @@ func radixSortInt64(dataI sort.Interface, t task, sortRange func(task)) {
 	// skip past common prefixes, bail if all keys equal
 	diff := min ^ max
 	if diff == 0 {
+		qSortEqualKeyRange(data, a, b)
 		return
 	}
 	if diff>>shift == 0 || diff>>(shift+radix) != 0 {
@@ -351,6 +367,13 @@ func radixSortInt64(dataI sort.Interface, t task, sortRange func(task)) {
 
 	if shift == 0 {
 		// each bucket is a unique key
+		pos = a
+		for _, end := range bucketEnds {
+			if end > pos+1 {
+				qSortEqualKeyRange(data, pos, end)
+			}
+			pos = end
+		}
 		return
 	}
 
@@ -386,6 +409,7 @@ func radixSortString(dataI sort.Interface, t task, sortRange func(task)) {
 
 	// swap too-short strings to start and count bucket sizes
 	bucketStarts, bucketEnds := [256]int{}, [256]int{}
+	aInitial := a
 	for i := a; i < b; i++ {
 		k := data.Key(i)
 		if len(k) <= offset {
@@ -395,6 +419,9 @@ func radixSortString(dataI sort.Interface, t task, sortRange func(task)) {
 			continue
 		}
 		bucketStarts[k[offset]]++
+	}
+	if a > aInitial+1 {
+		qSortEqualKeyRange(data, aInitial, a)
 	}
 
 	pos := a
@@ -448,6 +475,7 @@ func radixSortBytes(dataI sort.Interface, t task, sortRange func(task)) {
 
 	// swap too-short strings to start and count bucket sizes
 	bucketStarts, bucketEnds := [256]int{}, [256]int{}
+	aInitial := a
 	for i := a; i < b; i++ {
 		k := data.Key(i)
 		if len(k) <= offset {
@@ -457,6 +485,9 @@ func radixSortBytes(dataI sort.Interface, t task, sortRange func(task)) {
 			continue
 		}
 		bucketStarts[k[offset]]++
+	}
+	if a > aInitial+1 {
+		qSortEqualKeyRange(data, aInitial, a)
 	}
 
 	pos := a
@@ -489,4 +520,15 @@ func radixSortBytes(dataI sort.Interface, t task, sortRange func(task)) {
 			sortRange(task{offset + 1, start, i})
 		}
 	}
+}
+
+// qSortEqualKeyRange qSorts data[a:b] if it is not already sorted
+func qSortEqualKeyRange(data sort.Interface, a, b int) {
+	for i := a; i < b-1; i++ {
+		if data.Less(i+1, i) {
+			qSort(data, a, b)
+			return
+		}
+	}
+	return
 }

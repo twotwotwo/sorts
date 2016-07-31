@@ -62,6 +62,8 @@ func mustPanic(t *testing.T, name string, f func()) {
 }
 
 func TestSortCheck(t *testing.T) {
+	// only the new code, not qSort, panics if it's wrong
+	defer SetQSortCutoff(SetQSortCutoff(1))
 	if !Checking() {
 		return
 	}
@@ -152,6 +154,84 @@ func TestSortLarge_Random(t *testing.T) {
 	Ints(data)
 	if !IntsAreSorted(data) {
 		t.Errorf("sort didn't sort - 1M ints")
+	}
+}
+
+// RoundedKeyInt64s wraps sortutil.Int64Slice to return the same key for
+// some distinct values, to test using Less for a tiebreaker when using
+// int64 keys.
+type RoundedKeyInt64s struct { Int64Slice }
+func (r RoundedKeyInt64s) Key(i int) int64 { return r.Int64Slice[i] / 10 }
+
+// RoundedKeyUint64s wraps sortutil.Uint64Slice to return the same key for
+// some distinct values, to test using Less for a tiebreaker when using
+// uint64 keys.
+type RoundedKeyUint64s struct { Uint64Slice }
+func (r RoundedKeyUint64s) Key(i int) uint64 { return r.Uint64Slice[i] / 10 }
+
+// TruncatedKeyStrings wraps sortutil.StringSlice to truncate the value
+// returned by Key, to test using Less for a tiebreaker when using string
+// keys.
+type TruncatedKeyStrings struct { StringSlice }
+func (r TruncatedKeyStrings) Key(i int) string { return r.StringSlice[i][:1] }
+
+// TruncatedKeyBytes wraps sortutil.BytesSlice to truncate the value
+// returned by Key, to test using Less for a tiebreaker when using []bytes
+// keys.
+type TruncatedKeyBytes struct { BytesSlice }
+func (r TruncatedKeyBytes) Key(i int) []byte { return r.BytesSlice[i][:1] }
+
+func TestTiebreakEqualKeys(t *testing.T) {
+	n := 1000
+	// give radixsort as many chances to fail as possible
+	defer SetQSortCutoff(SetQSortCutoff(1))
+		
+	data := make([]int64, n)
+	for i := 0; i < len(data); i++ {
+		data[i] = rand.Int63n(100)
+	}
+	if Int64sAreSorted(data) {
+		t.Errorf("no random test data")
+	}
+	ByInt64(RoundedKeyInt64s{Int64Slice(data)})
+	if !Int64sAreSorted(data) {
+		t.Errorf("sort didn't sort - 1K rounded ints")
+	}
+
+	uintData := make([]uint64, n)
+	for i := 0; i < len(uintData); i++ {
+		uintData[i] = uint64(rand.Int63n(100))
+	}
+	if Uint64sAreSorted(uintData) {
+		t.Errorf("no random test data")
+	}
+	ByUint64(RoundedKeyUint64s{Uint64Slice(uintData)})
+	if !Uint64sAreSorted(uintData) {
+		t.Errorf("sort didn't sort - 1K rounded uints")
+	}
+	
+	stringData := make([]string, n)
+	for i := 0; i < len(stringData); i++ {
+		stringData[i] = strconv.Itoa(rand.Intn(100))
+	}
+	if StringsAreSorted(stringData) {
+		t.Errorf("no random test data")
+	}
+	ByString(TruncatedKeyStrings{StringSlice(stringData)})
+	if !StringsAreSorted(stringData) {
+		t.Errorf("sort didn't sort - 1K truncated strings")
+	}
+
+	bytesData := make([][]byte, n)
+	for i := 0; i < len(bytesData); i++ {
+		bytesData[i] = []byte(strconv.Itoa(rand.Intn(100)))
+	}
+	if BytesAreSorted(bytesData) {
+		t.Errorf("no random test data")
+	}
+	ByBytes(TruncatedKeyBytes{BytesSlice(bytesData)})
+	if !BytesAreSorted(bytesData) {
+		t.Errorf("sort didn't sort - 1K truncated []bytes")
 	}
 }
 
