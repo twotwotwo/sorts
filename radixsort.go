@@ -250,7 +250,7 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 		if nextShift < 0 {
 			nextShift = 0
 		}
-		sortRange(task{int(nextShift), a, b})
+		sortRange(task{nextShift, a, b})
 		return
 	}
 
@@ -340,7 +340,7 @@ func radixSortInt64(dataI sort.Interface, t task, sortRange func(task)) {
 		if nextShift < 0 {
 			nextShift = 0
 		}
-		sortRange(task{int(nextShift), a, b})
+		sortRange(task{nextShift, a, b})
 		return
 	}
 

@@ -11,9 +11,10 @@ package sortutil
 
 import (
 	"bytes"
-	"github.com/twotwotwo/sorts"
 	"math"
 	"sort"
+
+	"github.com/twotwotwo/sorts"
 )
 
 // Float32Key generates a uint64 key from a float32. Use with Float32Less.
@@ -35,7 +36,7 @@ func Float64Key(f float64) uint64 {
 	return b
 }
 
-// Float32Less compares float32s, treating NaN as greater than all numbers.
+// Float64Less compares float64s, treating NaN as greater than all numbers.
 func Float64Less(f, g float64) bool {
 	return Float64Key(f) < Float64Key(g)
 }
@@ -46,7 +47,9 @@ type IntSlice []int
 func (p IntSlice) Len() int           { return len(p) }
 func (p IntSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p IntSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p IntSlice) Key(i int) int64    { return int64(p[i]) }
+
+// Key produces a radix sort key for an integer item.
+func (p IntSlice) Key(i int) int64 { return int64(p[i]) }
 
 // Sort is a convenience method.
 func (p IntSlice) Sort() { sorts.ByInt64(p) }
@@ -57,7 +60,9 @@ type Int32Slice []int32
 func (p Int32Slice) Len() int           { return len(p) }
 func (p Int32Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Int32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Int32Slice) Key(i int) int64    { return int64(p[i]) }
+
+// Key produces a radix sort key for an integer item.
+func (p Int32Slice) Key(i int) int64 { return int64(p[i]) }
 
 // Sort is a convenience method.
 func (p Int32Slice) Sort() { sorts.ByInt64(p) }
@@ -68,7 +73,9 @@ type Int64Slice []int64
 func (p Int64Slice) Len() int           { return len(p) }
 func (p Int64Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Int64Slice) Key(i int) int64    { return p[i] }
+
+// Key produces a radix sort key for an integer item.
+func (p Int64Slice) Key(i int) int64 { return p[i] }
 
 // Sort is a convenience method.
 func (p Int64Slice) Sort() { sorts.ByInt64(p) }
@@ -79,7 +86,9 @@ type UintSlice []uint
 func (p UintSlice) Len() int           { return len(p) }
 func (p UintSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p UintSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p UintSlice) Key(i int) uint64   { return uint64(p[i]) }
+
+// Key produces a radix sort key for an unsigned integer item.
+func (p UintSlice) Key(i int) uint64 { return uint64(p[i]) }
 
 // Sort is a convenience method.
 func (p UintSlice) Sort() { sorts.ByUint64(p) }
@@ -90,7 +99,9 @@ type Uint32Slice []uint32
 func (p Uint32Slice) Len() int           { return len(p) }
 func (p Uint32Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Uint32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Uint32Slice) Key(i int) uint64   { return uint64(p[i]) }
+
+// Key produces a radix sort key for an unsigned integer item.
+func (p Uint32Slice) Key(i int) uint64 { return uint64(p[i]) }
 
 // Sort is a convenience method.
 func (p Uint32Slice) Sort() { sorts.ByUint64(p) }
@@ -101,7 +112,9 @@ type Uint64Slice []uint64
 func (p Uint64Slice) Len() int           { return len(p) }
 func (p Uint64Slice) Less(i, j int) bool { return p[i] < p[j] }
 func (p Uint64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Uint64Slice) Key(i int) uint64   { return p[i] }
+
+// Key produces a radix sort key for an unsigned integer item.
+func (p Uint64Slice) Key(i int) uint64 { return p[i] }
 
 // Sort is a convenience method.
 func (p Uint64Slice) Sort() { sorts.ByUint64(p) }
@@ -112,7 +125,9 @@ type Float32Slice []float32
 func (p Float32Slice) Len() int           { return len(p) }
 func (p Float32Slice) Less(i, j int) bool { return Float32Less(p[i], p[j]) }
 func (p Float32Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Float32Slice) Key(i int) uint64   { return Float32Key(p[i]) }
+
+// Key produces a radix sort key for a floating-point value.
+func (p Float32Slice) Key(i int) uint64 { return Float32Key(p[i]) }
 
 // Sort is a convenience method.
 func (p Float32Slice) Sort() { sorts.ByUint64(p) }
@@ -123,7 +138,9 @@ type Float64Slice []float64
 func (p Float64Slice) Len() int           { return len(p) }
 func (p Float64Slice) Less(i, j int) bool { return Float64Less(p[i], p[j]) }
 func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p Float64Slice) Key(i int) uint64   { return Float64Key(p[i]) }
+
+// Key produces a radix sort key for a floating-point value.
+func (p Float64Slice) Key(i int) uint64 { return Float64Key(p[i]) }
 
 // Sort is a convenience method.
 func (p Float64Slice) Sort() { sorts.ByUint64(p) }
@@ -134,7 +151,9 @@ type StringSlice []string
 func (p StringSlice) Len() int           { return len(p) }
 func (p StringSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p StringSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p StringSlice) Key(i int) string   { return p[i] }
+
+// Key returns a string item in a collection.
+func (p StringSlice) Key(i int) string { return p[i] }
 
 // Sort is a convenience method.
 func (p StringSlice) Sort() { sorts.ByString(p) }
@@ -145,7 +164,9 @@ type BytesSlice [][]byte
 func (p BytesSlice) Len() int           { return len(p) }
 func (p BytesSlice) Less(i, j int) bool { return bytes.Compare(p[i], p[j]) == -1 }
 func (p BytesSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p BytesSlice) Key(i int) []byte   { return p[i] }
+
+// Key returns a []byte item in a collection.
+func (p BytesSlice) Key(i int) []byte { return p[i] }
 
 // Sort is a convenience method.
 func (p BytesSlice) Sort() { sorts.ByBytes(p) }

@@ -56,7 +56,7 @@ func (u miskeyedBytes) Less(i, j int) bool {
 }
 
 func mustPanic(t *testing.T, name string, f func()) {
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	f()
 	t.Errorf("expected a panic on unsortable datatype %s", name)
 }
@@ -666,7 +666,6 @@ func TestAdversary(t *testing.T) {
 	d = &adversaryTestingData{data, make(map[int]int), 0}
 	Quicksort(d)
 }
-
 
 func BenchmarkSort1e2(b *testing.B) { bench(b, 1e2, byInt64Wrapper, "Sort") }
 func BenchmarkSort1e4(b *testing.B) { bench(b, 1e4, byInt64Wrapper, "Sort") }
