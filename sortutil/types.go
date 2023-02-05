@@ -119,6 +119,27 @@ func (p Uint64Slice) Key(i int) uint64 { return p[i] }
 // Sort is a convenience method.
 func (p Uint64Slice) Sort() { sorts.ByUint64(p) }
 
+type Uint128 struct{ Hi, Lo uint64 }
+
+// Uint128Slice attaches the methods of Uint128Interface to []Uint128, sorting in increasing order.
+type Uint128Slice []Uint128
+
+func (p Uint128Slice) Len() int { return len(p) }
+func (p Uint128Slice) Less(i, j int) bool {
+	pI := p[i]
+	pJ := p[j]
+	pIHi := pI.Hi
+	pJHi := pJ.Hi
+	return pIHi < pJHi || (pIHi == pJHi && pI.Lo < pJ.Lo)
+}
+func (p Uint128Slice) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+
+// Key produces a radix sort key for an unsigned integer item.
+func (p Uint128Slice) Key(i int) (uint64, uint64) { return p[i].Hi, p[i].Lo }
+
+// Sort is a convenience method.
+func (p Uint128Slice) Sort() { sorts.ByUint128(p) }
+
 // Float32Slice attaches the methods of Uint64Interface to []uint32, sorting in increasing order, NaNs last.
 type Float32Slice []float32
 

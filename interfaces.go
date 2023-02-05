@@ -20,6 +20,15 @@ type Uint64Interface interface {
 	Key(i int) uint64
 }
 
+// Uint128Interface represents a collection that can be sorted by a uint128
+// key.
+type Uint128Interface interface {
+	sort.Interface
+	// Key provides a uint128 key for element i, in the form of 2 uint64s
+	// containing the high and low bits, respectively.
+	Key(i int) (uint64, uint64)
+}
+
 // Int64Interface represents a collection that can be sorted by an int64
 // key.
 type Int64Interface interface {
