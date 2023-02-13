@@ -8,10 +8,11 @@
 package sortutil_test
 
 import (
-	. "github.com/twotwotwo/sorts/sortutil"
 	"math"
 	"sort"
 	"testing"
+
+	. "github.com/twotwotwo/sorts/sortutil"
 )
 
 // we need enough elements that radix sort will kick in, or we're not

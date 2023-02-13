@@ -54,6 +54,18 @@ func ByUint64(data Uint64Interface) {
 	}
 }
 
+// ByUint128 sorts data by a uint128 key.
+func ByUint128(data Uint128Interface) {
+	l := data.Len()
+	if l < qSortCutoff {
+		qSort(data, 0, l)
+		return
+	}
+
+	shift := guessInt128Shift(data, l)
+	parallelSort(data, radixSortUint128, task{offs: int(shift), end: l})
+}
+
 // int64Key generates a uint64 from an int64
 func int64Key(i int64) uint64 { return uint64(i) ^ 1<<63 }
 
@@ -166,6 +178,43 @@ func guessIntShift(data Uint64Interface, l int) uint {
 	return uint(shiftGuess)
 }
 
+// guessInt128Shift saves a pass when the data is distributed roughly uniformly
+// in a small range (think shuffled indices into a small array), and rarely
+// hurts much otherwise: either it just returns 64-radix quickly, or it
+// returns too small a shift and the sort notices after one useless counting
+// pass.
+func guessInt128Shift(data Uint128Interface, l int) uint {
+	step := l >> 5
+	if l > 1<<16 {
+		step = l >> 8
+	}
+	if step == 0 { // only for tests w/qSortCutoff lowered
+		step = 1
+	}
+	minHi, minLo := data.Key(l - 1)
+	maxHi, maxLo := minHi, minLo
+	for i := 0; i < l; i += step {
+		kHi, kLo := data.Key(i)
+		if lessUint128(kHi, kLo, minHi, minLo) {
+			minHi, minLo = kHi, kLo
+		}
+		if lessUint128(maxHi, maxLo, kHi, kLo) {
+			maxHi, maxLo = kHi, kLo
+		}
+	}
+	diffHi, diffLo := minHi^maxHi, minLo^maxLo
+	log2diff := 0
+	for !(diffHi == 0 && diffLo == 0) {
+		log2diff++
+		diffHi, diffLo = bitShiftRightOne(diffHi, diffLo)
+	}
+	shiftGuess := log2diff - radix
+	if shiftGuess < 0 {
+		return 0
+	}
+	return uint(shiftGuess)
+}
+
 /*
 Thanks to (and please refer to):
 
@@ -265,6 +314,103 @@ func radixSortUint64(dataI sort.Interface, t task, sortRange func(task)) {
 		i := bucketStarts[curBucket]
 		for i < bucketEnd {
 			destBucket := (data.Key(i) >> shift) & mask
+			if destBucket == uint64(curBucket) {
+				i++
+				bucketStarts[destBucket]++
+				continue
+			}
+			data.Swap(i, bucketStarts[destBucket])
+			bucketStarts[destBucket]++
+		}
+	}
+
+	if shift == 0 {
+		pos = a
+		for _, end := range bucketEnds {
+			if end > pos+1 {
+				qSortEqualKeyRange(data, pos, end)
+			}
+			pos = end
+		}
+		return
+	}
+
+	nextShift := shift - radix
+	if shift < radix {
+		nextShift = 0
+	}
+	pos = a
+	for _, end := range bucketEnds {
+		if end > pos+1 {
+			sortRange(task{int(nextShift), pos, end})
+		}
+		pos = end
+	}
+}
+
+func radixSortUint128(dataI sort.Interface, t task, sortRange func(task)) {
+	data := dataI.(Uint128Interface)
+	shift, a, b := uint(t.offs), t.pos, t.end
+	if b-a < qSortCutoff {
+		qSort(data, a, b)
+		return
+	}
+
+	// use a single pass over the keys to bucket data and find min/max
+	// (for skipping over bits that are always identical)
+	var bucketStarts, bucketEnds [1 << radix]int
+	minHi, minLo := data.Key(a)
+	maxHi, maxLo := minHi, minLo
+	for i := a; i < b; i++ {
+		kHi, kLo := data.Key(i)
+		_, kLoShift := bitShiftRight(kHi, kLo, shift)
+		bucketStarts[kLoShift&mask]++
+
+		if lessUint128(kHi, kLo, minHi, minLo) {
+			minHi, minLo = kHi, kLo
+		}
+		if lessUint128(maxHi, maxLo, kHi, kLo) {
+			maxHi, maxLo = kHi, kLo
+		}
+	}
+
+	// skip past common prefixes, bail if all keys equal
+	diffHi, diffLo := minHi^maxHi, minLo^maxLo
+	if diffHi == 0 && diffLo == 0 {
+		qSortEqualKeyRange(data, a, b)
+		return
+	}
+
+	diffHiShift, diffLoShift := bitShiftRight(diffHi, diffLo, shift)
+	diffHiShiftRadix, diffLoShiftRadix := bitShiftRight(diffHi, diffLo, shift+radix)
+	if (diffHiShift == 0 && diffLoShift == 0) || !(diffHiShiftRadix == 0 && diffLoShiftRadix == 0) {
+		// find highest 1 bit in diff
+		log2diff := 0
+		for !(diffHi == 0 && diffLo == 0) {
+			log2diff++
+			diffHi, diffLo = bitShiftRightOne(diffHi, diffLo)
+		}
+		nextShift := log2diff - radix
+		if nextShift < 0 {
+			nextShift = 0
+		}
+		sortRange(task{nextShift, a, b})
+		return
+	}
+
+	pos := a
+	for i, c := range bucketStarts {
+		bucketStarts[i] = pos
+		pos += c
+		bucketEnds[i] = pos
+	}
+
+	for curBucket, bucketEnd := range bucketEnds {
+		i := bucketStarts[curBucket]
+		for i < bucketEnd {
+			dataKeyHi, dataKeyLo := data.Key(i)
+			_, dataKeyLo = bitShiftRight(dataKeyHi, dataKeyLo, shift)
+			destBucket := (dataKeyLo) & mask
 			if destBucket == uint64(curBucket) {
 				i++
 				bucketStarts[destBucket]++
@@ -531,4 +677,31 @@ func qSortEqualKeyRange(data sort.Interface, a, b int) {
 		}
 	}
 	return
+}
+
+func lessUint128(aHi, aLo, bHi, bLo uint64) bool {
+	return aHi < bHi || (aHi == bHi && aLo < bLo)
+}
+
+func bitShiftRight(hi, lo uint64, shift uint) (uint64, uint64) {
+	switch {
+	case shift < 64:
+		loHiBits := hi << (64 - shift)
+		lo >>= shift
+		hi >>= shift
+		lo |= loHiBits
+		return hi, lo
+	default:
+		lo = hi >> (shift - 64)
+		hi = 0
+		return hi, lo
+	}
+}
+
+func bitShiftRightOne(hi, lo uint64) (uint64, uint64) {
+	loHiBits := hi << 63
+	lo >>= 1
+	hi >>= 1
+	lo |= loHiBits
+	return hi, lo
 }

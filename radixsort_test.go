@@ -9,11 +9,14 @@ package sorts_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	. "github.com/twotwotwo/sorts"
 	. "github.com/twotwotwo/sorts/sortutil"
@@ -160,32 +163,36 @@ func TestSortLarge_Random(t *testing.T) {
 // RoundedKeyInt64s wraps sortutil.Int64Slice to return the same key for
 // some distinct values, to test using Less for a tiebreaker when using
 // int64 keys.
-type RoundedKeyInt64s struct { Int64Slice }
+type RoundedKeyInt64s struct{ Int64Slice }
+
 func (r RoundedKeyInt64s) Key(i int) int64 { return r.Int64Slice[i] / 10 }
 
 // RoundedKeyUint64s wraps sortutil.Uint64Slice to return the same key for
 // some distinct values, to test using Less for a tiebreaker when using
 // uint64 keys.
-type RoundedKeyUint64s struct { Uint64Slice }
+type RoundedKeyUint64s struct{ Uint64Slice }
+
 func (r RoundedKeyUint64s) Key(i int) uint64 { return r.Uint64Slice[i] / 10 }
 
 // TruncatedKeyStrings wraps sortutil.StringSlice to truncate the value
 // returned by Key, to test using Less for a tiebreaker when using string
 // keys.
-type TruncatedKeyStrings struct { StringSlice }
+type TruncatedKeyStrings struct{ StringSlice }
+
 func (r TruncatedKeyStrings) Key(i int) string { return r.StringSlice[i][:1] }
 
 // TruncatedKeyBytes wraps sortutil.BytesSlice to truncate the value
 // returned by Key, to test using Less for a tiebreaker when using []bytes
 // keys.
-type TruncatedKeyBytes struct { BytesSlice }
+type TruncatedKeyBytes struct{ BytesSlice }
+
 func (r TruncatedKeyBytes) Key(i int) []byte { return r.BytesSlice[i][:1] }
 
 func TestTiebreakEqualKeys(t *testing.T) {
 	n := 1000
 	// give radixsort as many chances to fail as possible
 	defer SetQSortCutoff(SetQSortCutoff(1))
-		
+
 	data := make([]int64, n)
 	for i := 0; i < len(data); i++ {
 		data[i] = rand.Int63n(100)
@@ -209,7 +216,7 @@ func TestTiebreakEqualKeys(t *testing.T) {
 	if !Uint64sAreSorted(uintData) {
 		t.Errorf("sort didn't sort - 1K rounded uints")
 	}
-	
+
 	stringData := make([]string, n)
 	for i := 0; i < len(stringData); i++ {
 		stringData[i] = strconv.Itoa(rand.Intn(100))
@@ -670,3 +677,88 @@ func TestAdversary(t *testing.T) {
 func BenchmarkSort1e2(b *testing.B) { bench(b, 1e2, byInt64Wrapper, "Sort") }
 func BenchmarkSort1e4(b *testing.B) { bench(b, 1e4, byInt64Wrapper, "Sort") }
 func BenchmarkSort1e6(b *testing.B) { bench(b, 1e6, byInt64Wrapper, "Sort") }
+
+func TestByUint128(t *testing.T) {
+	rand := rand.New(rand.NewSource(42))
+
+	size := 130
+	uint128s := make(Uint128Slice, size)
+	for i := range uint128s {
+		uint128s[i] = Uint128{Hi: rand.Uint64(), Lo: rand.Uint64()}
+	}
+
+	uint128s.Sort()
+
+	for i := 1; i < len(uint128s); i++ {
+		assert.True(t, !uint128s.Less(i, i-1))
+	}
+}
+
+func FuzzByUint128(f *testing.F) {
+	f.Add([]byte("0000000000000000000000070000000000000000000000000"))
+	f.Fuzz(func(t *testing.T, b []byte) {
+		remainder := 0
+		bLen := len(b)
+		if bLen%16 != 0 {
+			remainder = ((bLen / 16) * 16) + 16 - bLen
+		}
+
+		if remainder != 0 {
+			r := make([]byte, remainder)
+			rand.Read(r)
+			b = append(b, r...)
+		}
+
+		uint128s := make(Uint128Slice, len(b)/16)
+		for i := range uint128s {
+			hi, lo := binary.LittleEndian.Uint64(b[i*16:]), binary.LittleEndian.Uint64(b[i*16+8:])
+			uint128s[i] = Uint128{Hi: hi, Lo: lo}
+		}
+		uint128s.Sort()
+
+		for i := 1; i < len(uint128s); i++ {
+			assert.True(t, !uint128s.Less(i, i-1))
+		}
+	})
+}
+
+func BenchmarkUint128(b *testing.B) {
+	size := 1_000_000
+
+	rand := rand.New(rand.NewSource(42))
+
+	uint128s := make(Uint128Slice, size)
+	for i := range uint128s {
+		uint128s[i] = Uint128{Hi: rand.Uint64(), Lo: rand.Uint64()}
+	}
+
+	b.Run("sort.Sort", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			c := make(Uint128Slice, len(uint128s))
+			copy(c, uint128s)
+			b.StartTimer()
+			sort.Sort(c)
+		}
+	})
+
+	b.Run("Quicksort", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			c := make(Uint128Slice, len(uint128s))
+			copy(c, uint128s)
+			b.StartTimer()
+			Quicksort(c)
+		}
+	})
+
+	b.Run("Radix", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			c := make(Uint128Slice, len(uint128s))
+			copy(c, uint128s)
+			b.StartTimer()
+			c.Sort()
+		}
+	})
+}
